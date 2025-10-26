@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jenkins-casc
+    privileged: true
+    user: root
+    ports:
+      - "8090:8080"      # Jenkins UI
+      - "50000:50000"    # Jenkins agent communication
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker access
+      - ../jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro
+      - ../../:/workspace:ro  # Mount project root (read-only for Jenkins to access repo)
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin123}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-changeme}
+      - DOCKER_REGISTRY_USER=${DOCKER_REGISTRY_USER:-admin}
+      - DOCKER_REGISTRY_PASS=${DOCKER_REGISTRY_PASS:-admin}
+      - KUBECONFIG_CONTENT_BASE64=${KUBECONFIG_CONTENT_BASE64:-}
+    networks:
+      - jenkins-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/login || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # Docker-in-Docker service for building images
+  docker-dind:
+    image: docker:24-dind
+    container_name: jenkins-docker
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - jenkins-docker-certs:/certs/client
+      - jenkins_home:/var/jenkins_home
+    networks:
+      - jenkins-network
+    restart: unless-stopped
+    command: --storage-driver=overlay2
+
+volumes:
+  jenkins_home:
+    driver: local
+  jenkins-docker-certs:
+    driver: local
+
+networks:
+  jenkins-network:
+    driver: bridge
