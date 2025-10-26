@@ -1,20 +1,20 @@
 // Jenkinsfile for monorepo with path-based service detection
 // Simplified: dev = build only, prod = build + deploy
 
-def services = [
-    'user-service',
-    'product-service',
-    'order-service',
-    'payment-service',
-    'shipping-service',
-    'favourite-service',
-    'api-gateway',
-    'cloud-config',
-    'service-discovery',
-    'proxy-client'
-]
-
 def getChangedServices() {
+    def servicesList = [
+        'user-service',
+        'product-service',
+        'order-service',
+        'payment-service',
+        'shipping-service',
+        'favourite-service',
+        'api-gateway',
+        'cloud-config',
+        'service-discovery',
+        'proxy-client'
+    ]
+    
     def changedServices = []
     def changedFiles = sh(
         script: '''
@@ -27,18 +27,18 @@ def getChangedServices() {
         returnStdout: true
     ).trim().split('\n')
     
-    for (service in services) {
-        if (changedFiles.any { it.startsWith("services/${service}/") }) {
+    for (service in servicesList) {
+        if (changedFiles.any { it.startsWith("${service}/") }) {
             changedServices.add(service)
         }
     }
     
     // Build all if root files changed
     if (changedFiles.any { it in ['pom.xml', 'compose.yml'] || it.startsWith('infra/') }) {
-        return services
+        return servicesList
     }
     
-    return changedServices.isEmpty() ? services : changedServices
+    return changedServices.isEmpty() ? servicesList : changedServices
 }
 
 def isProduction() {
@@ -73,7 +73,7 @@ pipeline {
         
         stage('Build Parent POM') {
             steps {
-                sh 'mvn clean install -DskipTests -Dmaven.repo.local=.m2/repository'
+                sh './mvnw clean install -DskipTests -Dmaven.repo.local=.m2/repository'
             }
         }
         
@@ -86,8 +86,8 @@ pipeline {
                     for (service in servicesToBuild) {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
-                            dir("services/${serviceName}") {
-                                sh "mvn clean package -DskipTests -Dmaven.repo.local=../../.m2/repository"
+                            dir("${serviceName}") {
+                                sh "../mvnw clean package -DskipTests -Dmaven.repo.local=../.m2/repository"
                                 sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
                                 
                                 withCredentials([usernamePassword(
