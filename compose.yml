@@ -6,6 +6,12 @@ services:
     networks:
       - microservices_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9411/health || exit 1"]
       interval: 3s
@@ -21,6 +27,12 @@ services:
       - 8761:8761
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
       - SPRING_CONFIG_IMPORT=optional:configserver:http://cloud-config-container:9296/
@@ -30,10 +42,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8761/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   cloud-config-container:
     build:
@@ -43,6 +55,12 @@ services:
       - 9296:9296
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -56,10 +74,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9296/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   api-gateway-container:
     build:
@@ -69,6 +87,12 @@ services:
       - 8080:8080
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -87,10 +111,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   proxy-client-container:
     build:
@@ -100,6 +124,12 @@ services:
       - 8900:8900
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -130,10 +160,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8900/app/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   order-service-container:
     build:
@@ -143,6 +173,12 @@ services:
       - 8300:8300
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -161,10 +197,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8300/order-service/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   payment-service-container:
     build:
@@ -174,6 +210,12 @@ services:
       - 8400:8400
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -192,10 +234,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8400/payment-service/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   product-service-container:
     build:
@@ -205,6 +247,12 @@ services:
       - 8500:8500
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - EUREKA_CLIENT_REGION=default
@@ -223,10 +271,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8500/product-service/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   shipping-service-container:
     build:
@@ -236,6 +284,12 @@ services:
       - 8600:8600
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CONFIG_IMPORT=optional:configserver:http://cloud-config-container:9296/
@@ -258,10 +312,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8600/shipping-service/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   user-service-container:
     build:
@@ -271,6 +325,12 @@ services:
       - 8700:8700
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -289,10 +349,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8700/user-service/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
   favourite-service-container:
     build:
@@ -302,6 +362,12 @@ services:
       - 8800:8800
     networks:
       - microservices_network
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 384M
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_ZIPKIN_BASE-URL=http://zipkin:9411
@@ -320,10 +386,10 @@ services:
     restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8800/favourite-service/actuator/health || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
 
 networks:
   microservices_network:
