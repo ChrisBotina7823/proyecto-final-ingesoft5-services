@@ -71,6 +71,7 @@ pipeline {
             }
         }
         
+        /*
         stage('Build All Services') {
             steps {
                 script {
@@ -125,7 +126,8 @@ pipeline {
                 }
             }
         }
-        
+        */
+
         stage('Deploy to Kubernetes') {
             // when {
             //     expression { isProduction() }
@@ -144,8 +146,8 @@ pipeline {
                         sh """
                             echo "Logging in to Azure..."
                             az login --service-principal \
-                                -u \${AZURE_CLIENT_ID} \
-                                -p \${AZURE_CLIENT_SECRET} \
+                                --username \${AZURE_CLIENT_ID} \
+                                --password \${AZURE_CLIENT_SECRET} \
                                 --tenant \${AZURE_TENANT_ID}
                             
                             az account set --subscription \${AZURE_SUBSCRIPTION_ID}
