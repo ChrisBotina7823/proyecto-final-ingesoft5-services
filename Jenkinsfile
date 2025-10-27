@@ -71,40 +71,29 @@ pipeline {
             }
         }
         
-        stage('Build Parent POM') {
+        stage('Build All Services') {
             steps {
                 script {
-                    echo "Building parent POM and downloading common dependencies..."
+                    echo "Building entire Maven reactor (all modules)..."
                     sh 'chmod +x mvnw'
-                    sh './mvnw clean install -N -U -Dmaven.repo.local=.m2/repository'
-                    
-                    // Pre-download all dependencies for all services to avoid race conditions
-                    echo "Pre-downloading dependencies for all services..."
-                    def servicesToBuild = env.CHANGED_SERVICES.split(',')
-                    for (service in servicesToBuild) {
-                        sh """
-                            cd services/${service}
-                            ../../mvnw dependency:go-offline -Dmaven.repo.local=../../.m2/repository || true
-                        """
-                    }
-                    echo "Dependencies downloaded successfully"
+                    sh './mvnw clean install -DskipTests -Dmaven.repo.local=.m2/repository'
+                    echo "All services built successfully. JARs are ready."
                 }
             }
         }
         
-        stage('Build Services') {
+        stage('Docker Build & Push') {
             steps {
                 script {
                     def servicesToBuild = env.CHANGED_SERVICES.split(',')
                     def parallelBuilds = [:]
                     
+                    echo "Building and pushing Docker images in parallel..."
+                    
                     for (service in servicesToBuild) {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
                             dir("services/${serviceName}") {
-                                sh "chmod +x ../../mvnw"
-                                // Use offline mode since dependencies are already downloaded
-                                sh "../../mvnw clean package -DskipTests -o -Dmaven.repo.local=../../.m2/repository"
                                 sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
                                 
                                 withCredentials([usernamePassword(
