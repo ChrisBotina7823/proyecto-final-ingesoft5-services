@@ -49,7 +49,8 @@ pipeline {
     
     environment {
         DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'ghcr.io/chrisbotina7823'}"
-        MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
+        MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository -Dmaven.artifact.threads=10'
+        DOCKER_BUILDKIT = '1'
     }
     
     options {
@@ -72,8 +73,22 @@ pipeline {
         
         stage('Build Parent POM') {
             steps {
-                sh 'chmod +x mvnw'
-                sh './mvnw clean install -N -U -Dmaven.repo.local=.m2/repository'
+                script {
+                    echo "Building parent POM and downloading common dependencies..."
+                    sh 'chmod +x mvnw'
+                    sh './mvnw clean install -N -U -Dmaven.repo.local=.m2/repository'
+                    
+                    // Pre-download all dependencies for all services to avoid race conditions
+                    echo "Pre-downloading dependencies for all services..."
+                    def servicesToBuild = env.CHANGED_SERVICES.split(',')
+                    for (service in servicesToBuild) {
+                        sh """
+                            cd services/${service}
+                            ../../mvnw dependency:go-offline -Dmaven.repo.local=../../.m2/repository || true
+                        """
+                    }
+                    echo "Dependencies downloaded successfully"
+                }
             }
         }
         
@@ -88,7 +103,8 @@ pipeline {
                         parallelBuilds[serviceName] = {
                             dir("services/${serviceName}") {
                                 sh "chmod +x ../../mvnw"
-                                sh "../../mvnw clean package -DskipTests -Dmaven.repo.local=../../.m2/repository"
+                                // Use offline mode since dependencies are already downloaded
+                                sh "../../mvnw clean package -DskipTests -o -Dmaven.repo.local=../../.m2/repository"
                                 sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
                                 
                                 withCredentials([usernamePassword(
@@ -367,11 +383,14 @@ pipeline {
         }
         always {
             script {
-                echo "Cleaning up Docker resources..."
-                sh 'docker system prune -f --volumes || true'
+                echo "Cleaning up Docker resources (keeping Maven cache)..."
+                sh 'docker system prune -f || true'
                 
-                echo "Build artifacts:"
+                echo "Maven repository cache size:"
                 sh 'du -sh .m2/repository 2>/dev/null || echo "No Maven cache"'
+                
+                echo "Workspace size:"
+                sh 'du -sh . 2>/dev/null || echo "Unable to calculate"'
             }
         }
     }
