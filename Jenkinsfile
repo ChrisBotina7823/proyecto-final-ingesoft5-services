@@ -125,24 +125,6 @@ pipeline {
                                     docker push ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER}
                                     docker push ${DOCKER_REGISTRY}/${serviceName}:latest
                                 """
-                                
-                                // Set package visibility
-                                withCredentials([usernamePassword(
-                                    credentialsId: 'docker-registry',
-                                    usernameVariable: 'DOCKER_USER',
-                                    passwordVariable: 'DOCKER_PASS'
-                                )]) {
-                                    sh """
-                                        echo "Setting ${serviceName} package to public visibility..."
-                                        
-                                        curl -X PATCH \
-                                            -H "Accept: application/vnd.github+json" \
-                                            -H "Authorization: Bearer \${DOCKER_PASS}" \
-                                            -H "X-GitHub-Api-Version: 2022-11-28" \
-                                            https://api.github.com/users/\${DOCKER_USER}/packages/container/${serviceName}/visibility \
-                                            -d '{"visibility":"public"}' || echo "Package already public or needs manual setting"
-                                    """
-                                }
                             }
                         }
                     }
@@ -192,6 +174,25 @@ pipeline {
                         echo "Setting up namespace..."
                         kubectl get namespace ecommerce-prod || kubectl create namespace ecommerce-prod
                     """
+                    
+                    // Create Docker registry secret for pulling images from GHCR
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-registry',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo "Creating/updating Docker registry secret..."
+                            kubectl create secret docker-registry ghcr-secret \
+                                --docker-server=ghcr.io \
+                                --docker-username=\${DOCKER_USER} \
+                                --docker-password=\${DOCKER_PASS} \
+                                --namespace=ecommerce-prod \
+                                --dry-run=client -o yaml | kubectl apply -f -
+                            
+                            echo "Docker registry secret created/updated successfully"
+                        """
+                    }
                     
                     // Deploy infrastructure services first
                     sh """

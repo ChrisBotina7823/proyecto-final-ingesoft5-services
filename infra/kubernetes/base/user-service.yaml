@@ -63,6 +63,8 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 20
+      imagePullSecrets:
+      - name: ghcr-secret
 ---
 apiVersion: v1
 kind: Service
