@@ -28,12 +28,11 @@ def getChangedServices() {
     ).trim().split('\n')
     
     for (service in servicesList) {
-        if (changedFiles.any { it.startsWith("${service}/") }) {
+        if (changedFiles.any { it.startsWith("services/${service}/") }) {
             changedServices.add(service)
         }
     }
     
-    // Build all if root files changed
     if (changedFiles.any { it in ['pom.xml', 'compose.yml'] || it.startsWith('infra/') }) {
         return servicesList
     }
@@ -87,9 +86,9 @@ pipeline {
                     for (service in servicesToBuild) {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
-                            dir("${serviceName}") {
-                                sh "chmod +x ../mvnw"
-                                sh "../mvnw clean package -DskipTests -Dmaven.repo.local=../.m2/repository"
+                            dir("services/${serviceName}") {
+                                sh "chmod +x ../../mvnw"
+                                sh "../../mvnw clean package -DskipTests -Dmaven.repo.local=../../.m2/repository"
                                 sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
                                 
                                 withCredentials([usernamePassword(
