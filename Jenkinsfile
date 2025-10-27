@@ -49,7 +49,7 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'localhost:5000'}"
+        DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'ghcr.io/chrisbotina7823'}"
         MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository'
     }
     
@@ -73,6 +73,7 @@ pipeline {
         
         stage('Build Parent POM') {
             steps {
+                sh 'chmod +x mvnw'
                 sh './mvnw clean install -DskipTests -Dmaven.repo.local=.m2/repository'
             }
         }
@@ -87,6 +88,7 @@ pipeline {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
                             dir("${serviceName}") {
+                                sh "chmod +x ../mvnw"
                                 sh "../mvnw clean package -DskipTests -Dmaven.repo.local=../.m2/repository"
                                 sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
                                 
@@ -96,7 +98,7 @@ pipeline {
                                     passwordVariable: 'DOCKER_PASS'
                                 )]) {
                                     sh """
-                                        echo \${DOCKER_PASS} | docker login ${DOCKER_REGISTRY} -u \${DOCKER_USER} --password-stdin
+                                        echo \${DOCKER_PASS} | docker login ghcr.io -u \${DOCKER_USER} --password-stdin
                                         docker push ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER}
                                         docker push ${DOCKER_REGISTRY}/${serviceName}:latest
                                     """

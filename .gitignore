@@ -32,4 +32,12 @@ build/
 ### VS Code ###
 .vscode/
 
+### Environment files ###
 **/.env
+
+### Terraform ###
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfvars
