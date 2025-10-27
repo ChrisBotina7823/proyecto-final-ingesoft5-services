@@ -73,7 +73,7 @@ pipeline {
         stage('Build Parent POM') {
             steps {
                 sh 'chmod +x mvnw'
-                sh './mvnw clean install -DskipTests -Dmaven.repo.local=.m2/repository'
+                sh './mvnw clean install -N -U -Dmaven.repo.local=.m2/repository'
             }
         }
         
