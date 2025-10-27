@@ -136,116 +136,111 @@ pipeline {
                 script {
                     echo "=== Deploying to AKS using deploy script ==="
                     
-                    withCredentials([
-                        usernamePassword(credentialsId: 'azure-credentials', usernameVariable: 'AZURE_CLIENT_ID', passwordVariable: 'AZURE_CLIENT_SECRET'),
-                        string(credentialsId: 'azure-subscription-id', variable: 'AZURE_SUBSCRIPTION_ID'),
-                        string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
-                    ]) {
-                        // Login to Azure
-                        sh """
-                            echo "Logging in to Azure..."
-                            az login --service-principal \
-                                --username \${AZURE_CLIENT_ID} \
-                                --password \${AZURE_CLIENT_SECRET} \
-                                --tenant \${AZURE_TENANT_ID}
-                            
-                            az account set --subscription \${AZURE_SUBSCRIPTION_ID}
-                        """
+                    // Azure credentials are already available as environment variables from docker-compose.yml
+                    sh """
+                        echo "Logging in to Azure..."
+                        echo "Using Client ID: \${AZURE_CLIENT_ID}"
+                        az login --service-principal \
+                            --username \${AZURE_CLIENT_ID} \
+                            --password \${AZURE_CLIENT_SECRET} \
+                            --tenant \${AZURE_TENANT_ID}
                         
-                        // Get AKS credentials
-                        sh """
-                            echo "Getting AKS credentials..."
-                            az aks get-credentials \
-                                --resource-group rg-dev-ecommerce \
-                                --name aks-dev-ecommerce \
-                                --overwrite-existing
-                        """
+                        az account set --subscription \${AZURE_SUBSCRIPTION_ID}
+                    """
+                    
+                    // Get AKS credentials
+                    sh """
+                        echo "Getting AKS credentials..."
+                        az aks get-credentials \
+                            --resource-group rg-dev-ecommerce \
+                            --name aks-dev-ecommerce \
+                            --overwrite-existing
+                    """
+                    
+                    // Verify cluster connection
+                    sh """
+                        echo "Verifying cluster connection..."
+                        kubectl cluster-info
+                        kubectl get nodes
+                    """
+                    
+                    // Create or verify namespace
+                    sh """
+                        echo "Setting up namespace..."
+                        kubectl get namespace ecommerce-prod || kubectl create namespace ecommerce-prod
+                    """
+                    
+                    // Deploy infrastructure services first
+                    sh """
+                        echo "Deploying infrastructure services..."
+                        kubectl apply -f infra/kubernetes/base/service-discovery.yaml -n ecommerce-prod
+                        kubectl apply -f infra/kubernetes/base/cloud-config.yaml -n ecommerce-prod
+                        kubectl apply -f infra/kubernetes/base/zipkin.yaml -n ecommerce-prod
                         
-                        // Verify cluster connection
-                        sh """
-                            echo "Verifying cluster connection..."
-                            kubectl cluster-info
-                            kubectl get nodes
-                        """
+                        echo "Waiting for infrastructure pods to start..."
+                        sleep 10
                         
-                        // Create or verify namespace
-                        sh """
-                            echo "Setting up namespace..."
-                            kubectl get namespace ecommerce-prod || kubectl create namespace ecommerce-prod
-                        """
+                        echo "Waiting for infrastructure services to be ready (timeout: 5 minutes)..."
+                        kubectl wait --for=condition=ready pod -l app=service-discovery -n ecommerce-prod --timeout=300s
+                        kubectl wait --for=condition=ready pod -l app=cloud-config -n ecommerce-prod --timeout=300s
+                        kubectl wait --for=condition=ready pod -l app=zipkin -n ecommerce-prod --timeout=300s
                         
-                        // Deploy infrastructure services first
-                        sh """
-                            echo "Deploying infrastructure services..."
-                            kubectl apply -f infra/kubernetes/base/service-discovery.yaml -n ecommerce-prod
-                            kubectl apply -f infra/kubernetes/base/cloud-config.yaml -n ecommerce-prod
-                            kubectl apply -f infra/kubernetes/base/zipkin.yaml -n ecommerce-prod
-                            
-                            echo "Waiting for infrastructure pods to start..."
-                            sleep 10
-                            
-                            echo "Waiting for infrastructure services to be ready (timeout: 5 minutes)..."
-                            kubectl wait --for=condition=ready pod -l app=service-discovery -n ecommerce-prod --timeout=300s
-                            kubectl wait --for=condition=ready pod -l app=cloud-config -n ecommerce-prod --timeout=300s
-                            kubectl wait --for=condition=ready pod -l app=zipkin -n ecommerce-prod --timeout=300s
-                            
-                            echo "Infrastructure services are ready"
-                        """
-                        
-                        // Deploy business services
-                        def servicesToDeploy = env.CHANGED_SERVICES.split(',')
-                        def businessServices = servicesToDeploy.findAll { 
-                            it != 'service-discovery' && it != 'cloud-config' 
-                        }
-                        
-                        if (businessServices) {
-                            echo "Deploying business services: ${businessServices.join(', ')}"
-                            for (service in businessServices) {
-                                sh """
-                                    echo "Deploying ${service}..."
-                                    kubectl apply -f infra/kubernetes/base/${service}.yaml -n ecommerce-prod
-                                """
-                            }
-                            
-                            echo "Waiting for pods to initialize (60 seconds)..."
-                            sh "sleep 60"
-                            
-                            echo "Waiting for deployments to complete (timeout: 5 minutes each)..."
-                            for (service in businessServices) {
-                                sh """
-                                    echo "Waiting for ${service} deployment..."
-                                    kubectl rollout status deployment/${service} -n ecommerce-prod --timeout=300s
-                                """
-                            }
-                            
-                            echo "All business services deployed successfully"
-                        }
-                        
-                        // Show final status
-                        sh """
-                            echo "=== Deployment Status ==="
-                            kubectl get all -n ecommerce-prod
-                            
-                            echo ""
-                            echo "=== Pod Status ==="
-                            kubectl get pods -n ecommerce-prod -o wide
-                            
-                            echo ""
-                            echo "=== Service Endpoints ==="
-                            kubectl get svc -n ecommerce-prod
-                        """
-                        
-                        // Get API Gateway external IP
-                        sh """
-                            echo ""
-                            echo "=== API Gateway Public IP ==="
-                            kubectl get svc api-gateway -n ecommerce-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "LoadBalancer IP pending..."
-                            echo ""
-                        """
-                        
-                        // Logout from Azure
-                        sh 'az logout'
+                        echo "Infrastructure services are ready"
+                    """
+                    
+                    // Deploy business services
+                    def servicesToDeploy = env.CHANGED_SERVICES.split(',')
+                    def businessServices = servicesToDeploy.findAll { 
+                        it != 'service-discovery' && it != 'cloud-config' 
                     }
+                    
+                    if (businessServices) {
+                        echo "Deploying business services: ${businessServices.join(', ')}"
+                        for (service in businessServices) {
+                            sh """
+                                echo "Deploying ${service}..."
+                                kubectl apply -f infra/kubernetes/base/${service}.yaml -n ecommerce-prod
+                            """
+                        }
+                        
+                        echo "Waiting for pods to initialize (60 seconds)..."
+                        sh "sleep 60"
+                        
+                        echo "Waiting for deployments to complete (timeout: 5 minutes each)..."
+                        for (service in businessServices) {
+                            sh """
+                                echo "Waiting for ${service} deployment..."
+                                kubectl rollout status deployment/${service} -n ecommerce-prod --timeout=300s
+                            """
+                        }
+                        
+                        echo "All business services deployed successfully"
+                    }
+                    
+                    // Show final status
+                    sh """
+                        echo "=== Deployment Status ==="
+                        kubectl get all -n ecommerce-prod
+                        
+                        echo ""
+                        echo "=== Pod Status ==="
+                        kubectl get pods -n ecommerce-prod -o wide
+                        
+                        echo ""
+                        echo "=== Service Endpoints ==="
+                        kubectl get svc -n ecommerce-prod
+                    """
+                        
+                    // Get API Gateway external IP
+                    sh """
+                        echo ""
+                        echo "=== API Gateway Public IP ==="
+                        kubectl get svc api-gateway -n ecommerce-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "LoadBalancer IP pending..."
+                        echo ""
+                    """
+                    
+                    // Logout from Azure
+                    sh 'az logout'
                 }
             }
         }
