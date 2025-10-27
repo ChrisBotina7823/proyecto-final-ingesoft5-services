@@ -122,9 +122,9 @@ pipeline {
         }
         
         stage('Deploy to Kubernetes') {
-            when {
-                expression { isProduction() }
-            }
+            // when {
+            //     expression { isProduction() }
+            // }
             steps {
                 script {
                     echo "=== Deploying to AKS using deploy script ==="
@@ -245,9 +245,9 @@ pipeline {
         }
         
         stage('Verify Deployment') {
-            when {
-                expression { isProduction() }
-            }
+            // when {
+            //     expression { isProduction() }
+            // }
             steps {
                 script {
                     echo "=== Verifying Deployment Health ==="
@@ -336,7 +336,7 @@ pipeline {
                 echo "Build Number: ${env.BUILD_NUMBER}"
                 echo "Built services: ${env.CHANGED_SERVICES}"
                 
-                if (isProduction()) {
+                // if (isProduction()) {
                     echo ""
                     echo "Services deployed to AKS:"
                     echo "   - Namespace: ecommerce-prod"
@@ -348,7 +348,7 @@ pipeline {
                         GATEWAY_IP=\$(kubectl get svc api-gateway -n ecommerce-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo 'pending')
                         echo "   http://\${GATEWAY_IP}:8080"
                     """ 
-                }
+                // }
                 echo "=========================================="
             }
         }
