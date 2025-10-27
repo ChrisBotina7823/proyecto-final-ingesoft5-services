@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-discovery
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-discovery
+  template:
+    metadata:
+      labels:
+        app: service-discovery
+    spec:
+      containers:
+      - name: app
+        image: ghcr.io/chrisbotina7823/service-discovery:latest
+        ports:
+        - containerPort: 8761
+        env:
+        - name: SPRING_ZIPKIN_BASE-URL
+          value: "http://zipkin:9411"
+        - name: SPRING_CONFIG_IMPORT
+          value: "optional:configserver:http://cloud-config:9296/"
+        resources:
+          limits:
+            memory: 512Mi
+            cpu: 300m
+          requests:
+            memory: 256Mi
+            cpu: 150m
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-discovery
+spec:
+  selector:
+    app: service-discovery
+  ports:
+  - port: 8761
