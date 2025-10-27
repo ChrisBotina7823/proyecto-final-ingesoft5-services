@@ -82,8 +82,7 @@ pipeline {
                 script {
                     echo "Building entire Maven reactor (all modules)..."
                     sh 'chmod +x mvnw'
-                    // Use batch mode and skip tests to avoid property issues
-                    sh './mvnw clean install -B -DskipTests -Dmaven.repo.local=.m2/repository -Duser.home=${WORKSPACE}'
+                    sh './mvnw clean package'
                     echo "All services built successfully. JARs are ready."
                 }
             }
