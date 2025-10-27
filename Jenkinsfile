@@ -41,7 +41,12 @@ def getChangedServices() {
 }
 
 def isProduction() {
-    return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master'
+    // Check both BRANCH_NAME and GIT_BRANCH for compatibility
+    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
+    // Remove origin/ prefix if present
+    branch = branch.replaceAll(/^origin\//, '')
+    echo "Current branch detected: ${branch}"
+    return branch == 'main' || branch == 'master'
 }
 
 pipeline {
@@ -71,7 +76,7 @@ pipeline {
             }
         }
         
-        /*
+        
         stage('Build All Services') {
             steps {
                 script {
@@ -126,7 +131,6 @@ pipeline {
                 }
             }
         }
-        */
 
         stage('Deploy to Kubernetes') {
             // when {
