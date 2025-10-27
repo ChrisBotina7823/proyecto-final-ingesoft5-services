@@ -82,7 +82,15 @@ pipeline {
                 script {
                     echo "Building entire Maven reactor (all modules)..."
                     sh 'chmod +x mvnw'
-                    sh './mvnw clean package'
+                    
+                    // First install the parent POM to local repository
+                    echo "Installing parent POM..."
+                    sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository'
+                    
+                    // Then build all modules
+                    echo "Building all service modules..."
+                    sh './mvnw clean install -B -Dmaven.repo.local=.m2/repository'
+                    
                     echo "All services built successfully. JARs are ready."
                 }
             }
