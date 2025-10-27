@@ -92,6 +92,23 @@ pipeline {
             steps {
                 script {
                     def servicesToBuild = env.CHANGED_SERVICES.split(',')
+                    
+                    // Login once before parallel builds
+                    echo "Logging in to GitHub Container Registry..."
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-registry',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        retry(3) {
+                            sh """
+                                echo "Attempting Docker login to ghcr.io..."
+                                echo \${DOCKER_PASS} | docker login ghcr.io -u \${DOCKER_USER} --password-stdin
+                                echo "Docker login successful"
+                            """
+                        }
+                    }
+                    
                     def parallelBuilds = [:]
                     
                     echo "Building and pushing Docker images in parallel..."
@@ -100,27 +117,29 @@ pipeline {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
                             dir("services/${serviceName}") {
+                                echo "Building Docker image for ${serviceName}..."
                                 sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
                                 
+                                echo "Pushing images for ${serviceName}..."
+                                sh """
+                                    docker push ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER}
+                                    docker push ${DOCKER_REGISTRY}/${serviceName}:latest
+                                """
+                                
+                                // Set package visibility
                                 withCredentials([usernamePassword(
                                     credentialsId: 'docker-registry',
                                     usernameVariable: 'DOCKER_USER',
                                     passwordVariable: 'DOCKER_PASS'
                                 )]) {
                                     sh """
-                                        echo \${DOCKER_PASS} | docker login ghcr.io -u \${DOCKER_USER} --password-stdin
-                                        docker push ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER}
-                                        docker push ${DOCKER_REGISTRY}/${serviceName}:latest
-                                        
-                                        echo "Setting package to public visibility..."
-                                        TOKEN=\${DOCKER_PASS}
-                                        PACKAGE_NAME=${serviceName}
+                                        echo "Setting ${serviceName} package to public visibility..."
                                         
                                         curl -X PATCH \
                                             -H "Accept: application/vnd.github+json" \
-                                            -H "Authorization: Bearer \${TOKEN}" \
+                                            -H "Authorization: Bearer \${DOCKER_PASS}" \
                                             -H "X-GitHub-Api-Version: 2022-11-28" \
-                                            https://api.github.com/user/packages/container/\${PACKAGE_NAME} \
+                                            https://api.github.com/users/\${DOCKER_USER}/packages/container/${serviceName}/visibility \
                                             -d '{"visibility":"public"}' || echo "Package already public or needs manual setting"
                                     """
                                 }
