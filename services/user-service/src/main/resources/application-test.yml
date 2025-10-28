@@ -17,6 +17,11 @@ spring:
       enabled: false
       import-check:
         enabled: false
+  
+  # Exclude circuit breaker autoconfiguration
+  autoconfigure:
+    exclude:
+      - io.github.resilience4j.circuitbreaker.autoconfigure.CircuitBreakersHealthIndicatorAutoConfiguration
 
 # Disable Eureka
 eureka:
