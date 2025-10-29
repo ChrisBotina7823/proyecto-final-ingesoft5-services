@@ -14,10 +14,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.client.RestTemplate;
 
 import com.selimhorri.app.domain.Payment;
 import com.selimhorri.app.domain.PaymentStatus;
 import com.selimhorri.app.dto.PaymentDto;
+import com.selimhorri.app.dto.OrderDto;
 import com.selimhorri.app.helper.PaymentMappingHelper;
 import com.selimhorri.app.repository.PaymentRepository;
 import com.selimhorri.app.service.impl.PaymentServiceImpl;
@@ -32,14 +34,24 @@ class PaymentServiceTest {
     @Mock
     private PaymentRepository paymentRepository;
 
+    @Mock
+    private RestTemplate restTemplate;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 
     private Payment testPayment;
     private PaymentDto testPaymentDto;
+    private OrderDto testOrderDto;
 
     @BeforeEach
     void setUp() {
+        testOrderDto = OrderDto.builder()
+                .orderId(100)
+                .orderDesc("Test order")
+                .orderFee(299.99)
+                .build();
+
         testPayment = Payment.builder()
                 .paymentId(1)
                 .orderId(100)
@@ -51,6 +63,7 @@ class PaymentServiceTest {
                 .paymentId(1)
                 .isPayed(false)
                 .paymentStatus(PaymentStatus.NOT_STARTED)
+                .orderDto(testOrderDto)
                 .build();
     }
 
@@ -106,6 +119,7 @@ class PaymentServiceTest {
                 .paymentId(1)
                 .isPayed(true)
                 .paymentStatus(PaymentStatus.COMPLETED)
+                .orderDto(testOrderDto)
                 .build();
 
         when(paymentRepository.save(any(Payment.class))).thenReturn(testPayment);

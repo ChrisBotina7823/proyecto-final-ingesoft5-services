@@ -18,8 +18,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.selimhorri.app.domain.Product;
 import com.selimhorri.app.domain.Category;
 import com.selimhorri.app.dto.ProductDto;
+import com.selimhorri.app.dto.CategoryDto;
 import com.selimhorri.app.helper.ProductMappingHelper;
 import com.selimhorri.app.repository.ProductRepository;
+import com.selimhorri.app.repository.CategoryRepository;
 import com.selimhorri.app.service.impl.ProductServiceImpl;
 
 /**
@@ -32,16 +34,25 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private CategoryRepository categoryRepository;
+
     @InjectMocks
     private ProductServiceImpl productService;
 
     private Product testProduct;
     private ProductDto testProductDto;
     private Category testCategory;
+    private CategoryDto testCategoryDto;
 
     @BeforeEach
     void setUp() {
         testCategory = Category.builder()
+                .categoryId(1)
+                .categoryTitle("Electronics")
+                .build();
+
+        testCategoryDto = CategoryDto.builder()
                 .categoryId(1)
                 .categoryTitle("Electronics")
                 .build();
@@ -61,6 +72,7 @@ class ProductServiceTest {
                 .sku("LAP-001")
                 .priceUnit(999.99)
                 .quantity(10)
+                .categoryDto(testCategoryDto)
                 .build();
     }
 
@@ -120,6 +132,7 @@ class ProductServiceTest {
                 .sku("LAP-001")
                 .priceUnit(1299.99)
                 .quantity(5)
+                .categoryDto(testCategoryDto)
                 .build();
 
         when(productRepository.save(any(Product.class))).thenReturn(testProduct);
@@ -135,12 +148,14 @@ class ProductServiceTest {
     @Test
     void testDeleteById_ShouldDeleteProduct() {
         // Given
-        doNothing().when(productRepository).deleteById(1);
+        when(productRepository.findById(1)).thenReturn(Optional.of(testProduct));
+        doNothing().when(productRepository).delete(any(Product.class));
 
         // When
         productService.deleteById(1);
 
         // Then
-        verify(productRepository, times(1)).deleteById(1);
+        verify(productRepository, times(1)).findById(1);
+        verify(productRepository, times(1)).delete(any(Product.class));
     }
 }

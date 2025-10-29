@@ -15,6 +15,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.springframework.web.client.RestTemplate;
+
 import com.selimhorri.app.domain.OrderItem;
 import com.selimhorri.app.domain.id.OrderItemId;
 import com.selimhorri.app.dto.OrderItemDto;
@@ -31,6 +33,9 @@ class OrderItemServiceTest {
 
     @Mock
     private OrderItemRepository orderItemRepository;
+
+    @Mock
+    private RestTemplate restTemplate;
 
     @InjectMocks
     private OrderItemServiceImpl orderItemService;

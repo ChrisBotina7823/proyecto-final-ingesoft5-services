@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.selimhorri.app.domain.Order;
 import com.selimhorri.app.domain.Cart;
 import com.selimhorri.app.dto.OrderDto;
+import com.selimhorri.app.dto.CartDto;
 import com.selimhorri.app.helper.OrderMappingHelper;
 import com.selimhorri.app.repository.OrderRepository;
 import com.selimhorri.app.service.impl.OrderServiceImpl;
@@ -39,10 +40,16 @@ class OrderServiceTest {
     private Order testOrder;
     private OrderDto testOrderDto;
     private Cart testCart;
+    private CartDto testCartDto;
 
     @BeforeEach
     void setUp() {
         testCart = Cart.builder()
+                .cartId(1)
+                .userId(100)
+                .build();
+
+        testCartDto = CartDto.builder()
                 .cartId(1)
                 .userId(100)
                 .build();
@@ -60,6 +67,7 @@ class OrderServiceTest {
                 .orderDate(LocalDateTime.now())
                 .orderDesc("Test order")
                 .orderFee(299.99)
+                .cartDto(testCartDto)
                 .build();
     }
 
@@ -117,6 +125,7 @@ class OrderServiceTest {
                 .orderDate(LocalDateTime.now())
                 .orderDesc("Updated order")
                 .orderFee(399.99)
+                .cartDto(testCartDto)
                 .build();
 
         when(orderRepository.save(any(Order.class))).thenReturn(testOrder);
@@ -132,12 +141,14 @@ class OrderServiceTest {
     @Test
     void testDeleteById_ShouldDeleteOrder() {
         // Given
-        doNothing().when(orderRepository).deleteById(1);
+        when(orderRepository.findById(1)).thenReturn(Optional.of(testOrder));
+        doNothing().when(orderRepository).delete(any(Order.class));
 
         // When
         orderService.deleteById(1);
 
         // Then
-        verify(orderRepository, times(1)).deleteById(1);
+        verify(orderRepository, times(1)).findById(1);
+        verify(orderRepository, times(1)).delete(any(Order.class));
     }
 }

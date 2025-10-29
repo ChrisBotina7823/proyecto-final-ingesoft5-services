@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.selimhorri.app.domain.PaymentStatus;
 import com.selimhorri.app.dto.PaymentDto;
+import com.selimhorri.app.dto.OrderDto;
 
 /**
  * Integration tests for PaymentResource
@@ -42,12 +43,20 @@ class PaymentResourceIntegrationTest {
         private RestTemplate restTemplate;
 
     private PaymentDto testPaymentDto;
+    private OrderDto testOrderDto;
 
     @BeforeEach
     void setUp() {
+        testOrderDto = OrderDto.builder()
+                .orderId(100)
+                .orderDesc("Test order")
+                .orderFee(299.99)
+                .build();
+
         testPaymentDto = PaymentDto.builder()
                 .isPayed(false)
                 .paymentStatus(PaymentStatus.NOT_STARTED)
+                .orderDto(testOrderDto)
                 .build();
     }
 
