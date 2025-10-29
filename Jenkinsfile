@@ -2,7 +2,7 @@
 // Simplified: dev = build only, prod = build + deploy
 
 def getChangedServices() {
-    def servicesList = [
+    return [
         'user-service',
         'product-service',
         'order-service',
@@ -14,30 +14,6 @@ def getChangedServices() {
         'service-discovery',
         'proxy-client'
     ]
-    
-    def changedServices = []
-    def changedFiles = sh(
-        script: '''
-            if [ "${GIT_PREVIOUS_COMMIT}" = "" ]; then
-                git diff --name-only HEAD~1 HEAD
-            else
-                git diff --name-only ${GIT_PREVIOUS_COMMIT} ${GIT_COMMIT}
-            fi
-        ''',
-        returnStdout: true
-    ).trim().split('\n')
-    
-    for (service in servicesList) {
-        if (changedFiles.any { it.startsWith("services/${service}/") }) {
-            changedServices.add(service)
-        }
-    }
-    
-    if (changedFiles.any { it in ['pom.xml', 'compose.yml'] || it.startsWith('infra/') }) {
-        return servicesList
-    }
-    
-    return changedServices.isEmpty() ? servicesList : changedServices
 }
 
 def isProduction() {
