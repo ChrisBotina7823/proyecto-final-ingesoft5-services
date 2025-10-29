@@ -72,6 +72,53 @@ pipeline {
             }
         }
         
+        stage('Code Quality Analysis') {
+            steps {
+                script {
+                    echo "Running SonarQube analysis..."
+                    
+                    // Wait for SonarQube to be ready
+                    retry(5) {
+                        sh """
+                            echo "Checking SonarQube availability..."
+                            curl -f http://sonarqube:9000/api/system/status || (sleep 10 && exit 1)
+                        """
+                    }
+                    
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            ./mvnw sonar:sonar \
+                                -Dsonar.projectKey=proyecto-final-ingesoft5 \
+                                -Dsonar.projectName='Proyecto Final Ingeniería de Software 5' \
+                                -Dsonar.host.url=http://sonarqube:9000 \
+                                -Dsonar.login=\${SONAR_AUTH_TOKEN} \
+                                -Dmaven.repo.local=.m2/repository
+                        """
+                    }
+                    
+                    echo "SonarQube analysis completed. Check dashboard at http://sonarqube:9000"
+                }
+            }
+        }
+        
+        stage('Quality Gate') {
+            steps {
+                script {
+                    echo "Waiting for Quality Gate result..."
+                    timeout(time: 5, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            echo "WARNING: Quality Gate failed: ${qg.status}"
+                            echo "Continue deployment but check SonarQube dashboard for issues"
+                            // Don't fail the build, just warn
+                        } else {
+                            echo "Quality Gate passed successfully!"
+                        }
+                    }
+                }
+            }
+        }
+        
         stage('Docker Build & Push') {
             when {
                 expression { isProduction() }
