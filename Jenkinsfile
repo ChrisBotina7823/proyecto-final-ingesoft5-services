@@ -77,14 +77,6 @@ pipeline {
                 script {
                     echo "Running SonarQube analysis..."
                     
-                    // Wait for SonarQube to be ready
-                    retry(5) {
-                        sh """
-                            echo "Checking SonarQube availability..."
-                            curl -f http://sonarqube:9000/api/system/status || (sleep 10 && exit 1)
-                        """
-                    }
-                    
                     withSonarQubeEnv('SonarQube') {
                         sh """
                             ./mvnw sonar:sonar \
@@ -92,6 +84,7 @@ pipeline {
                                 -Dsonar.projectName='Proyecto Final Ingeniería de Software 5' \
                                 -Dsonar.host.url=http://sonarqube:9000 \
                                 -Dsonar.login=\${SONAR_AUTH_TOKEN} \
+                                -Dsonar.password=\${SONAR_AUTH_TOKEN} \
                                 -Dmaven.repo.local=.m2/repository
                         """
                     }
