@@ -82,14 +82,15 @@ pipeline {
                             ./mvnw sonar:sonar \
                                 -Dsonar.projectKey=proyecto-final-ingesoft5 \
                                 -Dsonar.projectName='Proyecto Final Ingeniería de Software 5' \
-                                -Dsonar.host.url=http://sonarqube:9000 \
-                                -Dsonar.login=\${SONAR_AUTH_TOKEN} \
-                                -Dsonar.password=\${SONAR_AUTH_TOKEN} \
+                                -Dsonar.host.url=\${SONAR_HOST_URL} \
+                                -Dsonar.login=admin \
+                                -Dsonar.password=\${SONAR_ADMIN_PASSWORD} \
+                                -Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml \
                                 -Dmaven.repo.local=.m2/repository
                         """
                     }
                     
-                    echo "SonarQube analysis completed. Check dashboard at http://sonarqube:9000"
+                    echo "SonarQube analysis completed. Check dashboard at \${SONAR_HOST_URL}"
                 }
             }
         }
