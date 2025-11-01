@@ -63,11 +63,11 @@ pipeline {
                     echo "Installing parent POM..."
                     sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository'
                     
-                    // Then build all modules
-                    echo "Building all service modules..."
+                    // Build all modules (includes: compile, test, jacoco:report, package, install)
+                    echo "Building all service modules with tests and coverage..."
                     sh './mvnw clean install -B -Dmaven.repo.local=.m2/repository'
                     
-                    echo "All services built successfully. JARs are ready."
+                    echo "All services built successfully. JARs and coverage reports are ready."
                 }
             }
         }
@@ -75,19 +75,21 @@ pipeline {
         stage('Code Quality Analysis') {
             steps {
                 script {
-                    echo "Running SonarQube analysis..."
+                    echo "Running SonarQube analysis with sonar-scanner..."
                     
                     withSonarQubeEnv('SonarQube') {
-                        sh """
-                            ./mvnw sonar:sonar \
-                                -Dsonar.projectKey=proyecto-final-ingesoft5 \
-                                -Dsonar.projectName='Proyecto Final Ingeniería de Software 5' \
-                                -Dsonar.host.url=\${SONAR_HOST_URL} \
-                                -Dsonar.login=admin \
-                                -Dsonar.password=\${SONAR_ADMIN_PASSWORD} \
-                                -Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml \
-                                -Dmaven.repo.local=.m2/repository
-                        """
+                        withCredentials([usernamePassword(
+                            credentialsId: 'sonarqube-admin',
+                            usernameVariable: 'SONAR_LOGIN',
+                            passwordVariable: 'SONAR_PASSWORD'
+                        )]) {
+                            sh """
+                                sonar-scanner \
+                                    -Dsonar.host.url=\${SONAR_HOST_URL} \
+                                    -Dsonar.login=\${SONAR_LOGIN} \
+                                    -Dsonar.password=\${SONAR_PASSWORD}
+                            """
+                        }
                     }
                     
                     echo "SonarQube analysis completed. Check dashboard at \${SONAR_HOST_URL}"
