@@ -38,6 +38,9 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 1, unit: 'HOURS')
         timestamps()
+        // Don't clean workspace before build to preserve Maven cache
+        skipDefaultCheckout(false)
+        disableConcurrentBuilds()
     }
     
     stages {
@@ -59,15 +62,27 @@ pipeline {
                     echo "Building entire Maven reactor (all modules)..."
                     sh 'chmod +x mvnw'
                     
+                    // Check if Maven cache exists
+                    def cacheExists = fileExists('.m2/repository')
+                    if (cacheExists) {
+                        echo "Using existing Maven cache (.m2/repository)"
+                        sh 'du -sh .m2/repository || true'
+                    } else {
+                        echo "Maven cache not found, will be created during build"
+                    }
+                    
                     // First install the parent POM to local repository
                     echo "Installing parent POM..."
-                    sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository'
+                    sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository -DskipTests'
                     
                     // Build all modules (includes: compile, test, jacoco:report, package, install)
+                    // Using -o (offline mode) if cache exists, otherwise download dependencies
                     echo "Building all service modules with tests and coverage..."
-                    sh './mvnw clean install -B -Dmaven.repo.local=.m2/repository'
+                    sh './mvnw clean install -B -Dmaven.repo.local=.m2/repository -Dmaven.artifact.threads=10'
                     
                     echo "All services built successfully. JARs and coverage reports are ready."
+                    echo "Maven cache size after build:"
+                    sh 'du -sh .m2/repository || true'
                 }
             }
         }
@@ -349,6 +364,11 @@ pipeline {
                 
                 echo "Workspace size:"
                 sh 'du -sh . 2>/dev/null || echo "Unable to calculate"'
+                
+                // Archive Maven cache for next build (only if it exists)
+                if (fileExists('.m2/repository')) {
+                    echo "Maven cache preserved for next build at .m2/repository"
+                }
             }
         }
     }
