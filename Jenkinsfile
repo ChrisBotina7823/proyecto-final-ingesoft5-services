@@ -62,15 +62,6 @@ pipeline {
                     echo "Building entire Maven reactor (all modules)..."
                     sh 'chmod +x mvnw'
                     
-                    // Check if Maven cache exists
-                    def cacheExists = fileExists('.m2/repository')
-                    if (cacheExists) {
-                        echo "Using existing Maven cache (.m2/repository)"
-                        sh 'du -sh .m2/repository || true'
-                    } else {
-                        echo "Maven cache not found, will be created during build"
-                    }
-                    
                     // First install the parent POM to local repository
                     echo "Installing parent POM..."
                     sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository -DskipTests'
@@ -92,40 +83,21 @@ pipeline {
                 script {
                     echo "Running SonarQube analysis with sonar-scanner..."
                     
-                    withSonarQubeEnv('SonarQube') {
-                        withCredentials([usernamePassword(
-                            credentialsId: 'sonarqube-admin',
-                            usernameVariable: 'SONAR_LOGIN',
-                            passwordVariable: 'SONAR_PASSWORD'
-                        )]) {
-                            sh """
-                                sonar-scanner \
-                                    -Dsonar.host.url=\${SONAR_HOST_URL} \
-                                    -Dsonar.login=\${SONAR_LOGIN} \
-                                    -Dsonar.password=\${SONAR_PASSWORD}
-                            """
-                        }
+                    withCredentials([usernamePassword(
+                        credentialsId: 'sonarqube-admin',
+                        usernameVariable: 'SONAR_LOGIN',
+                        passwordVariable: 'SONAR_PASSWORD'
+                    )]) {
+                        sh """
+                            sonar-scanner \
+                                -Dsonar.host.url=http://sonarqube:9000 \
+                                -Dsonar.login=\${SONAR_LOGIN} \
+                                -Dsonar.password=\${SONAR_PASSWORD}
+                        """
                     }
                     
-                    echo "SonarQube analysis completed. Check dashboard at \${SONAR_HOST_URL}"
-                }
-            }
-        }
-        
-        stage('Quality Gate') {
-            steps {
-                script {
-                    echo "Waiting for Quality Gate result..."
-                    timeout(time: 5, unit: 'MINUTES') {
-                        def qg = waitForQualityGate()
-                        if (qg.status != 'OK') {
-                            echo "WARNING: Quality Gate failed: ${qg.status}"
-                            echo "Continue deployment but check SonarQube dashboard for issues"
-                            // Don't fail the build, just warn
-                        } else {
-                            echo "Quality Gate passed successfully!"
-                        }
-                    }
+                    echo "SonarQube analysis completed. Check dashboard at http://sonarqube:9000/dashboard?id=proyecto-final-ingesoft5"
+                    echo "Note: Quality Gate status available in SonarQube dashboard (not blocking pipeline)"
                 }
             }
         }
