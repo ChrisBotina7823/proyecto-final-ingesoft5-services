@@ -149,7 +149,7 @@ pipeline {
                     ]) {
                         
                         sh """
-                            kubectl apply -f namespace.yaml
+                            kubectl apply -f infra/kubernetes/namespace.yaml
                         """
 
                         // Create Docker registry secret for pulling images from GHCR
