@@ -40,8 +40,10 @@ pipeline {
                 script {
                     
                     // Build parent POM and services
-                    sh 'chmod +x mvnw'
-                    './mvnw clean test'
+                    sh """
+                        chmod +x mvnw
+                        ./mvnw clean test
+                    """
                     
                     echo "All services built successfully. JARs and coverage reports are ready."
                 }
