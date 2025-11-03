@@ -38,14 +38,16 @@ pipeline {
         stage('Build All Services') {
             steps {
                 script {
+                    echo "Building parent POM and all services..."
                     
-                    // Build parent POM and services
+                    // Build parent POM first, then all services
                     sh """
                         chmod +x mvnw
+                        ./mvnw -N clean install -DskipTests                        
                         ./mvnw clean test
                     """
                     
-                    echo "All services built successfully. JARs and coverage reports are ready."
+                    echo "All services built successfully. JARs are ready."
                 }
             }
         }
