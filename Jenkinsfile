@@ -2,13 +2,9 @@
 // Simplified: dev = build only, prod = build + deploy
 
 def isProduction() {
-    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
-    echo "branch name ${env.BRANCH_NAME}"
-    echo "git branch ${env.GIT_BRANCH}"
-    echo "Current branch detected: ${branch}"
-    branch = branch.replaceAll(/^origin\//, '')
-    return branch == 'main' || branch == 'master'
+    return env.BRANCH_NAME == 'main'
 }
+
 
 pipeline {
     agent any
@@ -77,8 +73,6 @@ pipeline {
             }
             steps {
                 script {
-                    def servicesToBuild = env.CHANGED_SERVICES.split(',')
-
                     sh './mvnw clean package -DskipTests'
 
                     // Login once before parallel builds
@@ -100,8 +94,21 @@ pipeline {
                     def parallelBuilds = [:]
                     
                     echo "Building and pushing Docker images in parallel..."
-                    
-                    for (service in servicesToBuild) {
+
+                    def services = [
+                        "service-discovery",
+                        "cloud-config",
+                        "api-gateway",
+                        "proxy-client",
+                        "user-service",
+                        "product-service",
+                        "favourite-service",
+                        "order-service",
+                        "shipping-service",
+                        "payment-service"
+                    ]
+
+                    for (service in services) {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
                             dir("services/${serviceName}") {
