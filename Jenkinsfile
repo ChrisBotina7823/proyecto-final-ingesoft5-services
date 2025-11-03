@@ -10,6 +10,7 @@ def isProduction() {
     return branch == 'main' || branch == 'master'
 }
 
+
 pipeline {
     agent any
     
@@ -77,8 +78,6 @@ pipeline {
             }
             steps {
                 script {
-                    def servicesToBuild = env.CHANGED_SERVICES.split(',')
-
                     sh './mvnw clean package -DskipTests'
 
                     // Login once before parallel builds
@@ -100,8 +99,21 @@ pipeline {
                     def parallelBuilds = [:]
                     
                     echo "Building and pushing Docker images in parallel..."
-                    
-                    for (service in servicesToBuild) {
+
+                    def services = [
+                        "service-discovery",
+                        "cloud-config",
+                        "api-gateway",
+                        "proxy-client",
+                        "user-service",
+                        "product-service",
+                        "favourite-service",
+                        "order-service",
+                        "shipping-service",
+                        "payment-service"
+                    ]
+
+                    for (service in services) {
                         def serviceName = service
                         parallelBuilds[serviceName] = {
                             dir("services/${serviceName}") {
