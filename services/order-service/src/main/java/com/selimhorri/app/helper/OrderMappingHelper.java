@@ -21,16 +21,25 @@ public interface OrderMappingHelper {
 	}
 	
 	public static Order map(final OrderDto orderDto) {
-		return Order.builder()
-				.orderId(orderDto.getOrderId())
+		Order.OrderBuilder orderBuilder = Order.builder()
 				.orderDate(orderDto.getOrderDate())
 				.orderDesc(orderDto.getOrderDesc())
-				.orderFee(orderDto.getOrderFee())
-				.cart(
-						Cart.builder()
-							.cartId(orderDto.getCartDto().getCartId())
-							.build())
-				.build();
+				.orderFee(orderDto.getOrderFee());
+		
+		// Solo establecer orderId si NO es null (para updates)
+		if (orderDto.getOrderId() != null) {
+			orderBuilder.orderId(orderDto.getOrderId());
+		}
+		
+		// Crear Cart builder
+		Cart.CartBuilder cartBuilder = Cart.builder();
+		if (orderDto.getCartDto() != null && orderDto.getCartDto().getCartId() != null) {
+			cartBuilder.cartId(orderDto.getCartDto().getCartId());
+		}
+		
+		orderBuilder.cart(cartBuilder.build());
+		
+		return orderBuilder.build();
 	}
 	
 	

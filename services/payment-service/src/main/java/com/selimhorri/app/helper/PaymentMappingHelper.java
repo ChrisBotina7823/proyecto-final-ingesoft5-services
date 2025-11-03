@@ -19,12 +19,17 @@ public interface PaymentMappingHelper {
 	}
 	
 	public static Payment map(final PaymentDto paymentDto) {
-		return Payment.builder()
-				.paymentId(paymentDto.getPaymentId())
+		Payment.PaymentBuilder paymentBuilder = Payment.builder()
 				.orderId(paymentDto.getOrderDto().getOrderId())
 				.isPayed(paymentDto.getIsPayed())
-				.paymentStatus(paymentDto.getPaymentStatus())
-				.build();
+				.paymentStatus(paymentDto.getPaymentStatus());
+		
+		// Solo establecer paymentId si NO es null (para updates)
+		if (paymentDto.getPaymentId() != null) {
+			paymentBuilder.paymentId(paymentDto.getPaymentId());
+		}
+		
+		return paymentBuilder.build();
 	}
 	
 	
