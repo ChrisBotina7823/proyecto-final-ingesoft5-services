@@ -15,8 +15,6 @@ pipeline {
     
     environment {
         DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'ghcr.io/chrisbotina7823'}"
-        MAVEN_OPTS = '-Dmaven.repo.local=.m2/repository -Dmaven.artifact.threads=10'
-        DOCKER_BUILDKIT = '1'
     }
     
     options {
@@ -31,28 +29,19 @@ pipeline {
         stage('Initialize') {
             steps {
                 script {
-                    env.CHANGED_SERVICES = getChangedServices().join(',')
-                    echo "Branch: ${env.BRANCH_NAME}"
-                    echo "Services to build: ${env.CHANGED_SERVICES}"
-                    echo "Deploy to K8s: ${isProduction()}"
+                    echo "Is Production: ${isProduction()}"
                 }
             }
         }
         
         
         stage('Build All Services') {
-
-            when {
-                expression { isProduction() }
-            }
-
             steps {
                 script {
                     
                     // Build parent POM and services
                     sh 'chmod +x mvnw'
-                    sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository -DskipTests'                    
-                    sh './mvnw clean install -B -Dmaven.repo.local=.m2/repository -Dmaven.artifact.threads=10'
+                    './mvnw clean test'
                     
                     echo "All services built successfully. JARs and coverage reports are ready."
                 }
@@ -60,11 +49,6 @@ pipeline {
         }
         
         stage('Code Quality Analysis') {
-            
-            when {
-                expression { isProduction() }
-            }
-
             steps {
                 script {
                     echo "Running SonarQube analysis with sonar-scanner..."
@@ -151,10 +135,10 @@ pipeline {
                     ]) {
                         
                         sh """
-                            kubectl apply -f namespace.yaml
+                            kubectl apply -f infra/kubernetes/namespace.yaml
                         """
 
-                        // Create Docker registry secret for pulling images from GHCR
+                        //Create Docker registry secret for pulling images from GHCR
                         sh """
                             echo "Creating/updating Docker registry secret..."
                             kubectl create secret docker-registry ghcr-secret \
