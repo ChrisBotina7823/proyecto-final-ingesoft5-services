@@ -2,12 +2,7 @@
 // Simplified: dev = build only, prod = build + deploy
 
 def isProduction() {
-    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
-    echo "branch name ${env.BRANCH_NAME}"
-    echo "git branch ${env.GIT_BRANCH}"
-    echo "Current branch detected: ${branch}"
-    branch = branch.replaceAll(/^origin\//, '')
-    return branch == 'main' || branch == 'master'
+    return env.BRANCH_NAME == 'main'
 }
 
 
