@@ -35,17 +35,15 @@ pipeline {
         }
         
         
-        stage('Build All Services') {
+        stage('Build and Test Services') {
             steps {
                 script {
                     echo "Building parent POM and all services..."
                     
                     // Build parent POM first, then all services
-                    sh """
-                        chmod +x mvnw
-                        ./mvnw -N clean install -DskipTests                        
-                        ./mvnw clean test
-                    """
+                    sh 'chmod +x mvnw'
+                    sh './mvnw -N install -DskipTests'
+                    sh './mvnw clean test'
                     
                     echo "All services built successfully. JARs are ready."
                 }
@@ -72,7 +70,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Docker Build & Push') {
             when {
                 expression { isProduction() }
@@ -80,7 +78,9 @@ pipeline {
             steps {
                 script {
                     def servicesToBuild = env.CHANGED_SERVICES.split(',')
-                    
+
+                    sh './mvnw clean package -DskipTests'
+
                     // Login once before parallel builds
                     echo "Logging in to GitHub Container Registry..."
                     withCredentials([usernamePassword(
