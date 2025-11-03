@@ -25,20 +25,32 @@ public interface ProductMappingHelper {
 	}
 	
 	public static Product map(final ProductDto productDto) {
-		return Product.builder()
-				.productId(productDto.getProductId())
+		// Crear builder del producto sin ID (para creación)
+		Product.ProductBuilder productBuilder = Product.builder()
 				.productTitle(productDto.getProductTitle())
 				.imageUrl(productDto.getImageUrl())
 				.sku(productDto.getSku())
 				.priceUnit(productDto.getPriceUnit())
-				.quantity(productDto.getQuantity())
-				.category(
-						Category.builder()
-							.categoryId(productDto.getCategoryDto().getCategoryId())
-							.categoryTitle(productDto.getCategoryDto().getCategoryTitle())
-							.imageUrl(productDto.getCategoryDto().getImageUrl())
-							.build())
-				.build();
+				.quantity(productDto.getQuantity());
+		
+		// Solo establecer productId si NO es null (para updates)
+		if (productDto.getProductId() != null) {
+			productBuilder.productId(productDto.getProductId());
+		}
+		
+		// Crear category builder sin ID (si es una nueva categoría)
+		Category.CategoryBuilder categoryBuilder = Category.builder()
+				.categoryTitle(productDto.getCategoryDto().getCategoryTitle())
+				.imageUrl(productDto.getCategoryDto().getImageUrl());
+		
+		// Solo establecer categoryId si NO es null (para updates o referencia existente)
+		if (productDto.getCategoryDto().getCategoryId() != null) {
+			categoryBuilder.categoryId(productDto.getCategoryDto().getCategoryId());
+		}
+		
+		productBuilder.category(categoryBuilder.build());
+		
+		return productBuilder.build();
 	}
 	
 	

@@ -18,10 +18,15 @@ public interface CartMappingHelper {
 	}
 	
 	public static Cart map(final CartDto cartDto) {
-		return Cart.builder()
-				.cartId(cartDto.getCartId())
-				.userId(cartDto.getUserId())
-				.build();
+		Cart.CartBuilder cartBuilder = Cart.builder()
+				.userId(cartDto.getUserId());
+		
+		// Solo establecer cartId si NO es null (para updates)
+		if (cartDto.getCartId() != null) {
+			cartBuilder.cartId(cartDto.getCartId());
+		}
+		
+		return cartBuilder.build();
 	}
 	
 	

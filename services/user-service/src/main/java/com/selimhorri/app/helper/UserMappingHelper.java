@@ -30,28 +30,42 @@ public interface UserMappingHelper {
 	}
 	
 	public static User map(final UserDto userDto) {
-		User user = User.builder()
-				.userId(userDto.getUserId())
+		// Solo establecer userId si NO es null (para updates)
+		// Para nuevas entidades, dejar que JPA genere el ID
+		User.UserBuilder userBuilder = User.builder()
 				.firstName(userDto.getFirstName())
 				.lastName(userDto.getLastName())
 				.imageUrl(userDto.getImageUrl())
 				.email(userDto.getEmail())
-				.phone(userDto.getPhone())
-				.build();
+				.phone(userDto.getPhone());
 		
-		Credential credential = Credential.builder()
-				.credentialId(userDto.getCredentialDto().getCredentialId())
-				.username(userDto.getCredentialDto().getUsername())
-				.password(userDto.getCredentialDto().getPassword())
-				.roleBasedAuthority(userDto.getCredentialDto().getRoleBasedAuthority())
-				.isEnabled(userDto.getCredentialDto().getIsEnabled())
-				.isAccountNonExpired(userDto.getCredentialDto().getIsAccountNonExpired())
-				.isAccountNonLocked(userDto.getCredentialDto().getIsAccountNonLocked())
-				.isCredentialsNonExpired(userDto.getCredentialDto().getIsCredentialsNonExpired())
-				.user(user)  // Establecer la relación bidireccional
-				.build();
+		// Solo establecer el userId si existe (update), no en creación (create)
+		if (userDto.getUserId() != null) {
+			userBuilder.userId(userDto.getUserId());
+		}
 		
-		user.setCredential(credential);
+		User user = userBuilder.build();
+		
+		// Solo crear credential si el DTO lo incluye
+		if (userDto.getCredentialDto() != null) {
+			Credential.CredentialBuilder credentialBuilder = Credential.builder()
+					.username(userDto.getCredentialDto().getUsername())
+					.password(userDto.getCredentialDto().getPassword())
+					.roleBasedAuthority(userDto.getCredentialDto().getRoleBasedAuthority())
+					.isEnabled(userDto.getCredentialDto().getIsEnabled())
+					.isAccountNonExpired(userDto.getCredentialDto().getIsAccountNonExpired())
+					.isAccountNonLocked(userDto.getCredentialDto().getIsAccountNonLocked())
+					.isCredentialsNonExpired(userDto.getCredentialDto().getIsCredentialsNonExpired())
+					.user(user);  // Establecer la relación bidireccional
+			
+			// Solo establecer credentialId si existe (update)
+			if (userDto.getCredentialDto().getCredentialId() != null) {
+				credentialBuilder.credentialId(userDto.getCredentialDto().getCredentialId());
+			}
+			
+			Credential credential = credentialBuilder.build();
+			user.setCredential(credential);
+		}
 		
 		return user;
 	}
