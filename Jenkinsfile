@@ -132,9 +132,9 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
-            when {
-                expression { isProduction() }
-            }
+            // when {
+            //     expression { isProduction() }
+            // }
             steps {
                 script {
                     echo "=== Deploying to AKS using Kustomize ==="
