@@ -2,12 +2,13 @@
 // Simplified: dev = build only, prod = build + deploy
 
 def isProduction() {
-    def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
-    echo "branch name ${env.BRANCH_NAME}"
-    echo "git branch ${env.GIT_BRANCH}"
-    echo "Current branch detected: ${branch}"
-    branch = branch.replaceAll(/^origin\//, '')
-    return branch == 'main' || branch == 'master'
+    return false
+    // def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
+    // echo "branch name ${env.BRANCH_NAME}"
+    // echo "git branch ${env.GIT_BRANCH}"
+    // echo "Current branch detected: ${branch}"
+    // branch = branch.replaceAll(/^origin\//, '')
+    // return branch == 'main' || branch == 'master'
 }
 
 pipeline {
@@ -31,10 +32,7 @@ pipeline {
         stage('Initialize') {
             steps {
                 script {
-                    env.CHANGED_SERVICES = getChangedServices().join(',')
-                    echo "Branch: ${env.BRANCH_NAME}"
-                    echo "Services to build: ${env.CHANGED_SERVICES}"
-                    echo "Deploy to K8s: ${isProduction()}"
+                    echo "Is Production: ${isProduction()}"
                 }
             }
         }
