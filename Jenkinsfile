@@ -1,27 +1,12 @@
 // Jenkinsfile for monorepo with path-based service detection
 // Simplified: dev = build only, prod = build + deploy
 
-def getChangedServices() {
-    return [
-        'user-service',
-        'product-service',
-        'order-service',
-        'payment-service',
-        'shipping-service',
-        'favourite-service',
-        'api-gateway',
-        'cloud-config',
-        'service-discovery',
-        'proxy-client'
-    ]
-}
-
 def isProduction() {
-    // Check both BRANCH_NAME and GIT_BRANCH for compatibility
     def branch = env.BRANCH_NAME ?: env.GIT_BRANCH ?: 'unknown'
-    // Remove origin/ prefix if present
-    branch = branch.replaceAll(/^origin\//, '')
+    echo "branch name ${env.BRANCH_NAME}"
+    echo "git branch ${env.GIT_BRANCH}"
     echo "Current branch detected: ${branch}"
+    branch = branch.replaceAll(/^origin\//, '')
     return branch == 'main' || branch == 'master'
 }
 
@@ -38,7 +23,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timeout(time: 1, unit: 'HOURS')
         timestamps()
-        // Don't clean workspace before build to preserve Maven cache
         skipDefaultCheckout(false)
         disableConcurrentBuilds()
     }
@@ -57,28 +41,30 @@ pipeline {
         
         
         stage('Build All Services') {
+
+            when {
+                expression { isProduction() }
+            }
+
             steps {
                 script {
-                    echo "Building entire Maven reactor (all modules)..."
+                    
+                    // Build parent POM and services
                     sh 'chmod +x mvnw'
-                    
-                    // First install the parent POM to local repository
-                    echo "Installing parent POM..."
-                    sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository -DskipTests'
-                    
-                    // Build all modules (includes: compile, test, jacoco:report, package, install)
-                    // Using -o (offline mode) if cache exists, otherwise download dependencies
-                    echo "Building all service modules with tests and coverage..."
+                    sh './mvnw -N clean install -Dmaven.repo.local=.m2/repository -DskipTests'                    
                     sh './mvnw clean install -B -Dmaven.repo.local=.m2/repository -Dmaven.artifact.threads=10'
                     
                     echo "All services built successfully. JARs and coverage reports are ready."
-                    echo "Maven cache size after build:"
-                    sh 'du -sh .m2/repository || true'
                 }
             }
         }
         
         stage('Code Quality Analysis') {
+            
+            when {
+                expression { isProduction() }
+            }
+
             steps {
                 script {
                     echo "Running SonarQube analysis with sonar-scanner..."
@@ -95,9 +81,6 @@ pipeline {
                                 -Dsonar.password=\${SONAR_PASSWORD}
                         """
                     }
-                    
-                    echo "SonarQube analysis completed. Check dashboard at http://sonarqube:9000/dashboard?id=proyecto-final-ingesoft5"
-                    echo "Note: Quality Gate status available in SonarQube dashboard (not blocking pipeline)"
                 }
             }
         }
@@ -152,52 +135,26 @@ pipeline {
 
         stage('Deploy to Kubernetes') {
             when {
-                 expression { isProduction() }
+                expression { isProduction() }
             }
             steps {
                 script {
-                    echo "=== Deploying to AKS using deploy script ==="
+                    echo "=== Deploying to AKS using Kustomize ==="
                     
-                    // Azure credentials are already available as environment variables from docker-compose.yml
-                    sh """
-                        echo "Logging in to Azure..."
-                        echo "Using Client ID: \${AZURE_CLIENT_ID}"
-                        az login --service-principal \
-                            --username \${AZURE_CLIENT_ID} \
-                            --password \${AZURE_CLIENT_SECRET} \
-                            --tenant \${AZURE_TENANT_ID}
+                    withCredentials([
+                        file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG'),
+                        usernamePassword(
+                            credentialsId: 'docker-registry',
+                            usernameVariable: 'DOCKER_USER',
+                            passwordVariable: 'DOCKER_PASS'
+                        )
+                    ]) {
                         
-                        az account set --subscription \${AZURE_SUBSCRIPTION_ID}
-                    """
-                    
-                    // Get AKS credentials
-                    sh """
-                        echo "Getting AKS credentials..."
-                        az aks get-credentials \
-                            --resource-group rg-dev-ecommerce \
-                            --name aks-dev-ecommerce \
-                            --overwrite-existing
-                    """
-                    
-                    // Verify cluster connection
-                    sh """
-                        echo "Verifying cluster connection..."
-                        kubectl cluster-info
-                        kubectl get nodes
-                    """
-                    
-                    // Create or verify namespace
-                    sh """
-                        echo "Setting up namespace..."
-                        kubectl get namespace ecommerce-prod || kubectl create namespace ecommerce-prod
-                    """
-                    
-                    // Create Docker registry secret for pulling images from GHCR
-                    withCredentials([usernamePassword(
-                        credentialsId: 'docker-registry',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
+                        sh """
+                            kubectl apply -f namespace.yaml
+                        """
+
+                        // Create Docker registry secret for pulling images from GHCR
                         sh """
                             echo "Creating/updating Docker registry secret..."
                             kubectl create secret docker-registry ghcr-secret \
@@ -209,79 +166,25 @@ pipeline {
                             
                             echo "Docker registry secret created/updated successfully"
                         """
+                        
+                        // Deploy all services using Kustomize
+                        sh """
+                            echo "Deploying all services with Kustomize..."
+                            kubectl apply -k infra/kubernetes/
+                        """    
+                        
+                        sh """
+                            echo "Waiting for pods to be ready..."
+                            kubectl wait --for=condition=ready pod \
+                                --all \
+                                --namespace=ecommerce-prod \
+                                --timeout=300s || true
+                            echo "Deployment status:"
+                            kubectl get pods -n ecommerce-prod
+                        """
+                        
+                        echo "All services deployed successfully"
                     }
-                    
-                    // Deploy infrastructure services first
-                    sh """
-                        echo "Deploying infrastructure services..."
-                        kubectl apply -f infra/kubernetes/base/service-discovery.yaml -n ecommerce-prod
-                        kubectl apply -f infra/kubernetes/base/cloud-config.yaml -n ecommerce-prod
-                        kubectl apply -f infra/kubernetes/base/zipkin.yaml -n ecommerce-prod
-                        
-                        echo "Waiting for infrastructure pods to start..."
-                        sleep 10
-                        
-                        echo "Waiting for infrastructure services to be ready (timeout: 5 minutes)..."
-                        kubectl wait --for=condition=ready pod -l app=service-discovery -n ecommerce-prod --timeout=300s
-                        kubectl wait --for=condition=ready pod -l app=cloud-config -n ecommerce-prod --timeout=300s
-                        kubectl wait --for=condition=ready pod -l app=zipkin -n ecommerce-prod --timeout=300s
-                        
-                        echo "Infrastructure services are ready"
-                    """
-                    
-                    // Deploy business services
-                    def servicesToDeploy = env.CHANGED_SERVICES.split(',')
-                    def businessServices = servicesToDeploy.findAll { 
-                        it != 'service-discovery' && it != 'cloud-config' 
-                    }
-                    
-                    if (businessServices) {
-                        echo "Deploying business services: ${businessServices.join(', ')}"
-                        for (service in businessServices) {
-                            sh """
-                                echo "Deploying ${service}..."
-                                kubectl apply -f infra/kubernetes/base/${service}.yaml -n ecommerce-prod
-                            """
-                        }
-                        
-                        echo "Waiting for pods to initialize (60 seconds)..."
-                        sh "sleep 60"
-                        
-                        echo "Waiting for deployments to complete (timeout: 5 minutes each)..."
-                        for (service in businessServices) {
-                            sh """
-                                echo "Waiting for ${service} deployment..."
-                                kubectl rollout status deployment/${service} -n ecommerce-prod --timeout=300s
-                            """
-                        }
-                        
-                        echo "All business services deployed successfully"
-                    }
-                    
-                    // Show final status
-                    sh """
-                        echo "=== Deployment Status ==="
-                        kubectl get all -n ecommerce-prod
-                        
-                        echo ""
-                        echo "=== Pod Status ==="
-                        kubectl get pods -n ecommerce-prod -o wide
-                        
-                        echo ""
-                        echo "=== Service Endpoints ==="
-                        kubectl get svc -n ecommerce-prod
-                    """
-                        
-                    // Get API Gateway external IP
-                    sh """
-                        echo ""
-                        echo "=== API Gateway Public IP ==="
-                        kubectl get svc api-gateway -n ecommerce-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "LoadBalancer IP pending..."
-                        echo ""
-                    """
-                    
-                    // Logout from Azure
-                    sh 'az logout'
                 }
             }
         }        
@@ -293,24 +196,6 @@ pipeline {
                 echo "=========================================="
                 echo "PIPELINE COMPLETED SUCCESSFULLY"
                 echo "=========================================="
-                echo "Branch: ${env.BRANCH_NAME}"
-                echo "Build Number: ${env.BUILD_NUMBER}"
-                echo "Built services: ${env.CHANGED_SERVICES}"
-                
-                if (isProduction()) {
-                    echo ""
-                    echo "Services deployed to AKS:"
-                    echo "   - Namespace: ecommerce-prod"
-                    echo "   - Cluster: aks-dev-ecommerce"
-                    echo "   - Resource Group: rg-dev-ecommerce"
-                    echo ""
-                    echo "Access API Gateway at:"
-                    sh """
-                        GATEWAY_IP=\$(kubectl get svc api-gateway -n ecommerce-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo 'pending')
-                        echo "   http://\${GATEWAY_IP}:8080"
-                    """
-                }
-                echo "=========================================="
             }
         }
         failure {
@@ -318,29 +203,6 @@ pipeline {
                 echo "=========================================="
                 echo "PIPELINE FAILED"
                 echo "=========================================="
-                echo "Branch: ${env.BRANCH_NAME}"
-                echo "Build Number: ${env.BUILD_NUMBER}"
-                echo "Failed during: ${currentBuild.result}"
-                echo ""
-                echo "Check logs above for details"
-                echo "=========================================="
-            }
-        }
-        always {
-            script {
-                echo "Cleaning up Docker resources (keeping Maven cache)..."
-                sh 'docker system prune -f || true'
-                
-                echo "Maven repository cache size:"
-                sh 'du -sh .m2/repository 2>/dev/null || echo "No Maven cache"'
-                
-                echo "Workspace size:"
-                sh 'du -sh . 2>/dev/null || echo "Unable to calculate"'
-                
-                // Archive Maven cache for next build (only if it exists)
-                if (fileExists('.m2/repository')) {
-                    echo "Maven cache preserved for next build at .m2/repository"
-                }
             }
         }
     }
