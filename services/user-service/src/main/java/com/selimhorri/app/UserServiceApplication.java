@@ -9,7 +9,7 @@ import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
 public class UserServiceApplication {
 
 	public static void main(String[] args) {
-		// minimal change to see if it deploys
+		// minimal change to see if it deploys hmmm
 		SpringApplication.run(UserServiceApplication.class, args);
 	}
 	

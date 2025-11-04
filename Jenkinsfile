@@ -62,11 +62,6 @@ pipeline {
         }
         
         stage('Build and Test Services') {
-        
-            when {
-                expression { isProduction() }
-            }
-
             steps {
                 script {
                     sh 'chmod +x mvnw'
@@ -77,12 +72,6 @@ pipeline {
         }
         
         stage('Code Quality Analysis') {
-            
-            when {
-                expression { isProduction() }
-            }
-
-
             steps {
                 script {
                     withCredentials([usernamePassword(
