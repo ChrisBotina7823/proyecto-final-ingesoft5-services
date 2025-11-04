@@ -64,8 +64,10 @@ pipeline {
             steps {
                 script {
                     sh 'chmod +x mvnw'
-                    sh './mvnw -N clean install'
-                    sh './mvnw clean verify'
+                    sh 'du -sh ~/.m2/repository 2>/dev/null || echo "Maven cache: empty"'
+                    sh './mvnw -N clean install --batch-mode --no-transfer-progress'
+                    sh './mvnw clean verify -T 1C --batch-mode --no-transfer-progress'
+                    sh 'du -sh ~/.m2/repository'
                 }
             }
         }
