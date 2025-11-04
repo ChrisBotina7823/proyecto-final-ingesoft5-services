@@ -211,14 +211,14 @@ pipeline {
                             sh """
                                 echo "Setting up port-forward to API Gateway..."
                                 
-                                # Start port-forward in background
-                                kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod &
+                                # Start port-forward in background (using port 9090 to avoid conflict with Jenkins)
+                                kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
                                 PORT_FORWARD_PID=\$!
                                 
                                 # Wait for port-forward to be ready
                                 echo "Waiting for port-forward to be ready..."
                                 for i in {1..30}; do
-                                    if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                                    if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
                                         echo "Port-forward ready!"
                                         break
                                     fi
@@ -229,8 +229,8 @@ pipeline {
                                 # Install dependencies (cached in volume)
                                 npm ci --prefer-offline --no-audit
                                 
-                                # Run Cypress tests against localhost
-                                NO_COLOR=1 npx cypress run \
+                                # Run Cypress tests against localhost:9090
+                                NO_COLOR=1 CYPRESS_baseUrl=http://localhost:9090 npx cypress run \
                                     --config video=false,screenshotOnRunFailure=false
                                 
                                 # Kill port-forward
@@ -253,13 +253,13 @@ pipeline {
                             sh """
                                 echo "Setting up port-forward to API Gateway..."
                                 
-                                # Start port-forward in background
-                                kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod &
+                                # Start port-forward in background (using port 9090 to avoid conflict with Jenkins)
+                                kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
                                 PORT_FORWARD_PID=\$!
                                 
                                 # Wait for port-forward to be ready
                                 for i in {1..30}; do
-                                    if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                                    if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
                                         echo "Port-forward ready!"
                                         break
                                     fi
@@ -269,10 +269,10 @@ pipeline {
                                 # Install dependencies (cached in volume)
                                 /opt/locust-venv/bin/pip install -r requirements.txt --quiet
                                 
-                                # Run Locust tests against localhost
+                                # Run Locust tests against localhost:9090
                                 /opt/locust-venv/bin/locust \
                                     --headless \
-                                    --host=http://localhost:8080 \
+                                    --host=http://localhost:9090 \
                                     --users 10 \
                                     --spawn-rate 2 \
                                     --run-time 30s \
