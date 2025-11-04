@@ -200,28 +200,43 @@ pipeline {
             // }
             steps {
                 script {
-                    // Copy tests to workspace to avoid read-only issues
-                    sh """
-                        mkdir -p /tmp/e2e-tests
-                        cp -r tests/e2e/* /tmp/e2e-tests/
-                    """
-                    
-                    dir('/tmp/e2e-tests') {
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        // Copy tests to workspace to avoid read-only issues
                         sh """
-                            echo "Running E2E tests against: ${API_GATEWAY_URL}"
-                            
-                            # Install dependencies (cached in volume)
-                            npm ci --prefer-offline --no-audit
-                            
-                            # Disable Jenkins proxy for Cypress
-                            export HTTP_PROXY=
-                            export HTTPS_PROXY=
-                            export NO_PROXY=*
-                            
-                            # Run Cypress tests with correct baseUrl
-                            NO_COLOR=1 CYPRESS_baseUrl=${API_GATEWAY_URL} npx cypress run \
-                                --config video=false,screenshotOnRunFailure=false
+                            mkdir -p /tmp/e2e-tests
+                            cp -r tests/e2e/* /tmp/e2e-tests/
                         """
+                        
+                        dir('/tmp/e2e-tests') {
+                            sh """
+                                echo "Setting up port-forward to API Gateway..."
+                                
+                                # Start port-forward in background
+                                kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod &
+                                PORT_FORWARD_PID=\$!
+                                
+                                # Wait for port-forward to be ready
+                                echo "Waiting for port-forward to be ready..."
+                                for i in {1..30}; do
+                                    if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                                        echo "Port-forward ready!"
+                                        break
+                                    fi
+                                    echo "Attempt \$i/30: Port-forward not ready yet..."
+                                    sleep 2
+                                done
+                                
+                                # Install dependencies (cached in volume)
+                                npm ci --prefer-offline --no-audit
+                                
+                                # Run Cypress tests against localhost
+                                NO_COLOR=1 npx cypress run \
+                                    --config video=false,screenshotOnRunFailure=false
+                                
+                                # Kill port-forward
+                                kill \$PORT_FORWARD_PID || true
+                            """
+                        }
                     }
                 }
             }
@@ -233,22 +248,40 @@ pipeline {
             // }
             steps {
                 script {
-                    dir('tests/performance') {
-                        sh """
-                            echo "Running performance tests against: ${API_GATEWAY_URL}"
-                            
-                            # Install dependencies (cached in volume)
-                            /opt/locust-venv/bin/pip install -r requirements.txt --quiet
-                            
-                            # Run Locust tests (lightweight)
-                            /opt/locust-venv/bin/locust \
-                                --headless \
-                                --host=${API_GATEWAY_URL} \
-                                --users 10 \
-                                --spawn-rate 2 \
-                                --run-time 30s \
-                                --loglevel WARNING
-                        """
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        dir('tests/performance') {
+                            sh """
+                                echo "Setting up port-forward to API Gateway..."
+                                
+                                # Start port-forward in background
+                                kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod &
+                                PORT_FORWARD_PID=\$!
+                                
+                                # Wait for port-forward to be ready
+                                for i in {1..30}; do
+                                    if curl -s http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                                        echo "Port-forward ready!"
+                                        break
+                                    fi
+                                    sleep 2
+                                done
+                                
+                                # Install dependencies (cached in volume)
+                                /opt/locust-venv/bin/pip install -r requirements.txt --quiet
+                                
+                                # Run Locust tests against localhost
+                                /opt/locust-venv/bin/locust \
+                                    --headless \
+                                    --host=http://localhost:8080 \
+                                    --users 10 \
+                                    --spawn-rate 2 \
+                                    --run-time 30s \
+                                    --loglevel WARNING
+                                
+                                # Kill port-forward
+                                kill \$PORT_FORWARD_PID || true
+                            """
+                        }
                     }
                 }
             }
