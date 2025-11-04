@@ -459,11 +459,3 @@ def on_test_stop(environment, **kwargs):
             else:
                 print(f"  OK: Performance acceptable")
             print()
-    
-    print("=" * 80)
-    print("\nRECOMMENDATIONS:")
-    print("-" * 80)
-    print("* If N+1 endpoints show >500ms avg: Implement batch fetching or caching")
-    print("* If CREATE operations fail with FK errors: Ensure base data exists (user/product/category ID=1)")
-    print("* If overall failure rate >5%: Check microservice logs for errors")
-    print("=" * 80)
