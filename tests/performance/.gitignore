@@ -1,0 +1,18 @@
+# Python - Locust
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# Locust reports
+reports/
+*.html
+*.csv
+*.log
