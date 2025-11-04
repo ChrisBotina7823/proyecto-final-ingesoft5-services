@@ -213,6 +213,11 @@ pipeline {
                             # Install dependencies (cached in volume)
                             npm ci --prefer-offline --no-audit
                             
+                            # Disable Jenkins proxy for Cypress
+                            export HTTP_PROXY=
+                            export HTTPS_PROXY=
+                            export NO_PROXY=*
+                            
                             # Run Cypress tests (without colors for cleaner logs)
                             NO_COLOR=1 npx cypress run \
                                 --config baseUrl=${API_GATEWAY_URL} \
