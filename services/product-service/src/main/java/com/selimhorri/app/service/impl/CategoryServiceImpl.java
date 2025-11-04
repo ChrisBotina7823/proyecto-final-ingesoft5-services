@@ -59,8 +59,11 @@ public class CategoryServiceImpl implements CategoryService {
 	@Override
 	public CategoryDto update(final Integer categoryId, final CategoryDto categoryDto) {
 		log.info("*** CategoryDto, service; update category with categoryId *");
+		// BUG FIX: Use categoryDto data, not just fetch existing and ignore updates
+		// Set the ID from path parameter to ensure we update the right entity
+		categoryDto.setCategoryId(categoryId);
 		return CategoryMappingHelper.map(this.categoryRepository
-				.save(CategoryMappingHelper.map(this.findById(categoryId))));
+				.save(CategoryMappingHelper.map(categoryDto)));
 	}
 	
 	@Override

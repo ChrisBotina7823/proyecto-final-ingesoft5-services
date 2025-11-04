@@ -8,13 +8,13 @@ jenkins:
     local:
       allowsSignup: false
       users:
-        - id: "${JENKINS_ADMIN_USER:-admin}"
-          password: "${JENKINS_ADMIN_PASSWORD:-admin123}"
+        - id: "${JENKINS_ADMIN_USER}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
           
   authorizationStrategy:
     globalMatrix:
       permissions:
-        - "Overall/Administer:${JENKINS_ADMIN_USER:-admin}"
+        - "Overall/Administer:${JENKINS_ADMIN_USER}"
         - "Overall/Read:authenticated"
         
   clouds:
@@ -37,25 +37,33 @@ credentials:
   system:
     domainCredentials:
       - credentials:
-          - string:
+          - usernamePassword:
               scope: GLOBAL
               id: "github-token"
-              secret: "${GITHUB_TOKEN:-changeme}"
+              username: "ChrisBotina7823"
+              password: "${GITHUB_TOKEN}"
               description: "GitHub Personal Access Token"
               
           - usernamePassword:
               scope: GLOBAL
               id: "docker-registry"
-              username: "${DOCKER_REGISTRY_USER:-admin}"
-              password: "${DOCKER_REGISTRY_PASS:-admin}"
+              username: "${DOCKER_REGISTRY_USER}"
+              password: "${DOCKER_REGISTRY_PASS}"
               description: "Docker Registry Credentials"
-              
+            
           - file:
               scope: GLOBAL
-              id: "kubeconfig-local"
+              id: "kubeconfig"
               fileName: "kubeconfig"
-              secretBytes: "${KUBECONFIG_CONTENT_BASE64}"
+              secretBytes: ${KUBECONFIG_BASE64}
               description: "Local Kubernetes Cluster Config"
+              
+          - usernamePassword:
+              scope: GLOBAL
+              id: "sonarqube-admin"
+              username: "admin"
+              password: "${SONAR_ADMIN_PASSWORD}"
+              description: "SonarQube Admin Credentials"
 
 unclassified:
   location:
@@ -68,3 +76,32 @@ unclassified:
         
   timestamper:
     allPipelines: true
+    
+  sonarGlobalConfiguration:
+    installations:
+      - name: "SonarQube"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonarqube-admin"
+
+jobs:
+  - script: >
+      multibranchPipelineJob('ecommerce-microservices') {
+        branchSources {
+          git {
+            id('ecommerce-repo')
+            remote('https://github.com/ChrisBotina7823/proyecto-final-ingesoft5-services.git')
+            credentialsId('github-token')
+            includes('main develop')
+          }
+        }
+        orphanedItemStrategy {
+          discardOldItems {
+            numToKeep(5)
+          }
+        }
+        triggers {
+          periodicFolderTrigger {
+            interval('5m')
+          }
+        }
+      }

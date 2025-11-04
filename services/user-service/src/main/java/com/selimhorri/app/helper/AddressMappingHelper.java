@@ -34,11 +34,6 @@ public interface AddressMappingHelper {
 				.user(
 					User.builder()
 						.userId(addressDto.getUserDto().getUserId())
-						.firstName(addressDto.getUserDto().getFirstName())
-						.lastName(addressDto.getUserDto().getLastName())
-						.imageUrl(addressDto.getUserDto().getImageUrl())
-						.email(addressDto.getUserDto().getEmail())
-						.phone(addressDto.getUserDto().getPhone())
 						.build())
 				.build();
 	}

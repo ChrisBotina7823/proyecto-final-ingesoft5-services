@@ -27,9 +27,6 @@ public interface CategoryMappingHelper {
 	
 	public static Category map(final CategoryDto categoryDto) {
 		
-		final var parentCategoryDto = Optional.ofNullable(categoryDto
-				.getParentCategoryDto()).orElseGet(() -> new CategoryDto());
-		
 		// Crear builder de la categoría sin ID (para creación)
 		Category.CategoryBuilder categoryBuilder = Category.builder()
 				.categoryTitle(categoryDto.getCategoryTitle())
@@ -40,18 +37,17 @@ public interface CategoryMappingHelper {
 			categoryBuilder.categoryId(categoryDto.getCategoryId());
 		}
 		
-		// Crear builder de la categoría padre sin ID (para creación)
-		Category.CategoryBuilder parentCategoryBuilder = Category.builder()
-				.categoryTitle(parentCategoryDto.getCategoryTitle())
-				.imageUrl(parentCategoryDto.getImageUrl());
-		
-		// Solo establecer parentCategoryId si NO es null (para updates)
-		if (parentCategoryDto.getCategoryId() != null) {
-			parentCategoryBuilder.categoryId(parentCategoryDto.getCategoryId());
+		// Solo establecer categoría padre si parentCategoryDto existe y no es null
+		if (categoryDto.getParentCategoryDto() != null && 
+		    categoryDto.getParentCategoryDto().getCategoryId() != null) {
+			
+			Category.CategoryBuilder parentCategoryBuilder = Category.builder()
+					.categoryTitle(categoryDto.getParentCategoryDto().getCategoryTitle())
+					.imageUrl(categoryDto.getParentCategoryDto().getImageUrl())
+					.categoryId(categoryDto.getParentCategoryDto().getCategoryId());
+			
+			categoryBuilder.parentCategory(parentCategoryBuilder.build());
 		}
-		
-		// Establecer la categoría padre si existe
-		categoryBuilder.parentCategory(parentCategoryBuilder.build());
 		
 		return categoryBuilder.build();
 	}

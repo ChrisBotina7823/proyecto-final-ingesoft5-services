@@ -1,16 +1,44 @@
-// Jenkinsfile for monorepo with path-based service detection
-// Simplified: dev = build only, prod = build + deploy
-
 def isProduction() {
     return env.BRANCH_NAME == 'main'
 }
 
+def getChangedServices() {
+    def changedFiles = sh(
+        script: 'git diff --name-only HEAD~1 HEAD',
+        returnStdout: true
+    ).trim().split('\n')
+    
+    def services = [] as Set
+    def allServices = [
+        "service-discovery",
+        "cloud-config",
+        "api-gateway",
+        "proxy-client",
+        "user-service",
+        "product-service",
+        "favourite-service",
+        "order-service",
+        "shipping-service",
+        "payment-service"
+    ]
+    
+    changedFiles.each { file ->
+        allServices.each { service ->
+            if (file.startsWith("services/${service}/")) {
+                services.add(service)
+            }
+        }
+    }
+    
+    return services as List
+}
 
 pipeline {
     agent any
     
     environment {
         DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'ghcr.io/chrisbotina7823'}"
+        GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
     }
     
     options {
@@ -25,23 +53,18 @@ pipeline {
         stage('Initialize') {
             steps {
                 script {
-                    echo "Is Production: ${isProduction()}"
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Commit: ${GIT_COMMIT_SHORT}"
+                    echo "Production: ${isProduction()}"
                 }
             }
         }
         
-        
         stage('Build and Test Services') {
             steps {
                 script {
-                    echo "Building parent POM and all services..."
-                    
-                    // Build parent POM first, then all services
                     sh 'chmod +x mvnw'
-                    sh './mvnw -N install -DskipTests'
-                    sh './mvnw clean test'
-                    
-                    echo "All services built successfully. JARs are ready."
+                    sh './mvnw clean verify'
                 }
             }
         }
@@ -49,8 +72,6 @@ pipeline {
         stage('Code Quality Analysis') {
             steps {
                 script {
-                    echo "Running SonarQube analysis with sonar-scanner..."
-                    
                     withCredentials([usernamePassword(
                         credentialsId: 'sonarqube-admin',
                         usernameVariable: 'SONAR_LOGIN',
@@ -73,56 +94,42 @@ pipeline {
             }
             steps {
                 script {
-                    sh './mvnw clean package -DskipTests'
-
-                    // Login once before parallel builds
-                    echo "Logging in to GitHub Container Registry..."
+                    def changedServices = getChangedServices()
+                    
+                    if (changedServices.isEmpty()) {
+                        echo "No service changes detected"
+                        return
+                    }
+                    
+                    echo "Changed services: ${changedServices.join(', ')}"
+                    
                     withCredentials([usernamePassword(
                         credentialsId: 'docker-registry',
                         usernameVariable: 'DOCKER_USER',
                         passwordVariable: 'DOCKER_PASS'
                     )]) {
-                        retry(3) {
-                            sh """
-                                echo "Attempting Docker login to ghcr.io..."
-                                echo \${DOCKER_PASS} | docker login ghcr.io -u \${DOCKER_USER} --password-stdin
-                                echo "Docker login successful"
-                            """
-                        }
+                        sh "echo \${DOCKER_PASS} | docker login ghcr.io -u \${DOCKER_USER} --password-stdin"
                     }
                     
                     def parallelBuilds = [:]
                     
-                    echo "Building and pushing Docker images in parallel..."
-
-                    def services = [
-                        "service-discovery",
-                        "cloud-config",
-                        "api-gateway",
-                        "proxy-client",
-                        "user-service",
-                        "product-service",
-                        "favourite-service",
-                        "order-service",
-                        "shipping-service",
-                        "payment-service"
-                    ]
-
-                    for (service in services) {
+                    changedServices.each { service ->
                         def serviceName = service
                         parallelBuilds[serviceName] = {
                             dir("services/${serviceName}") {
-                                echo "Building Docker image for ${serviceName}..."
-                                sh "docker build -t ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER} -t ${DOCKER_REGISTRY}/${serviceName}:latest ."
-                                
-                                echo "Pushing images for ${serviceName}..."
                                 sh """
-                                    docker push ${DOCKER_REGISTRY}/${serviceName}:${env.BUILD_NUMBER}
+                                    docker build \
+                                        -t ${DOCKER_REGISTRY}/${serviceName}:${GIT_COMMIT_SHORT} \
+                                        -t ${DOCKER_REGISTRY}/${serviceName}:latest \
+                                        .
+                                    
+                                    docker push ${DOCKER_REGISTRY}/${serviceName}:${GIT_COMMIT_SHORT}
                                     docker push ${DOCKER_REGISTRY}/${serviceName}:latest
                                 """
                             }
                         }
                     }
+                    
                     parallel parallelBuilds
                 }
             }
@@ -134,7 +141,12 @@ pipeline {
             }
             steps {
                 script {
-                    echo "=== Deploying to AKS using Kustomize ==="
+                    def changedServices = getChangedServices()
+                    
+                    if (changedServices.isEmpty()) {
+                        echo "No deployments needed"
+                        return
+                    }
                     
                     withCredentials([
                         file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG'),
@@ -144,41 +156,31 @@ pipeline {
                             passwordVariable: 'DOCKER_PASS'
                         )
                     ]) {
+                        sh "kubectl apply -f infra/kubernetes/namespace.yaml"
                         
                         sh """
-                            kubectl apply -f infra/kubernetes/namespace.yaml
-                        """
-
-                        //Create Docker registry secret for pulling images from GHCR
-                        sh """
-                            echo "Creating/updating Docker registry secret..."
                             kubectl create secret docker-registry ghcr-secret \
                                 --docker-server=ghcr.io \
                                 --docker-username=\${DOCKER_USER} \
                                 --docker-password=\${DOCKER_PASS} \
                                 --namespace=ecommerce-prod \
                                 --dry-run=client -o yaml | kubectl apply -f -
-                            
-                            echo "Docker registry secret created/updated successfully"
                         """
                         
-                        // Deploy all services using Kustomize
-                        sh """
-                            echo "Deploying all services with Kustomize..."
-                            kubectl apply -k infra/kubernetes/
-                        """    
+                        dir('infra/kubernetes') {
+                            changedServices.each { service ->
+                                sh "kustomize edit set image ${service}=${DOCKER_REGISTRY}/${service}:${GIT_COMMIT_SHORT}"
+                            }
+                        }
+                        
+                        sh "kubectl apply -k infra/kubernetes/"
                         
                         sh """
-                            echo "Waiting for pods to be ready..."
                             kubectl wait --for=condition=ready pod \
                                 --all \
                                 --namespace=ecommerce-prod \
                                 --timeout=300s || true
-                            echo "Deployment status:"
-                            kubectl get pods -n ecommerce-prod
                         """
-                        
-                        echo "All services deployed successfully"
                     }
                 }
             }
@@ -187,18 +189,10 @@ pipeline {
     
     post {
         success {
-            script {
-                echo "=========================================="
-                echo "PIPELINE COMPLETED SUCCESSFULLY"
-                echo "=========================================="
-            }
+            echo "Pipeline completed successfully"
         }
         failure {
-            script {
-                echo "=========================================="
-                echo "PIPELINE FAILED"
-                echo "=========================================="
-            }
+            echo "Pipeline failed"
         }
     }
 }
