@@ -39,6 +39,7 @@ pipeline {
     environment {
         DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'ghcr.io/chrisbotina7823'}"
         GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        API_GATEWAY_URL = "${env.API_GATEWAY_URL ?: 'http://host.docker.internal:8080'}"
     }
     
     options {
@@ -144,11 +145,6 @@ pipeline {
                 script {
                     def changedServices = getChangedServices()
                     
-                    if (changedServices.isEmpty()) {
-                        echo "No deployments needed"
-                        return
-                    }
-                    
                     withCredentials([
                         file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG'),
                         usernamePassword(
@@ -182,6 +178,100 @@ pipeline {
                                 --namespace=ecommerce-prod \
                                 --timeout=300s || true
                         """
+                    }
+                }
+            }
+        }
+
+        stage('E2E Tests') {
+            when {
+                expression { isProduction() }
+            }
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        // Copy tests to workspace to avoid read-only issues
+                        sh """
+                            mkdir -p /tmp/e2e-tests
+                            cp -r tests/e2e/* /tmp/e2e-tests/
+                        """
+                        
+                        dir('/tmp/e2e-tests') {
+                            sh """
+                                echo "Setting up port-forward to API Gateway..."
+                                
+                                # Start port-forward in background (using port 9090 to avoid conflict with Jenkins)
+                                kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
+                                PORT_FORWARD_PID=\$!
+                                
+                                # Wait for port-forward to be ready
+                                echo "Waiting for port-forward to be ready..."
+                                for i in {1..30}; do
+                                    if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
+                                        echo "Port-forward ready!"
+                                        break
+                                    fi
+                                    echo "Attempt \$i/30: Port-forward not ready yet..."
+                                    sleep 2
+                                done
+                                
+                                # Install dependencies (cached in volume)
+                                npm ci --prefer-offline --no-audit
+                                
+                                # Run Cypress tests against localhost:9090
+                                NO_COLOR=1 CYPRESS_baseUrl=http://localhost:9090 npx cypress run \
+                                    --config video=false,screenshotOnRunFailure=false
+                                
+                                # Kill port-forward
+                                kill \$PORT_FORWARD_PID || true
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Performance Tests') {
+            when {
+                expression { isProduction() }
+            }
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        dir('tests/performance') {
+                            sh """
+                                echo "Setting up port-forward to API Gateway..."
+                                
+                                # Start port-forward in background (using port 9090 to avoid conflict with Jenkins)
+                                kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
+                                PORT_FORWARD_PID=\$!
+                                
+                                # Wait for port-forward to be ready
+                                for i in {1..30}; do
+                                    if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
+                                        echo "Port-forward ready!"
+                                        break
+                                    fi
+                                    sleep 2
+                                done
+                                
+                                # Install dependencies (cached in volume)
+                                /opt/locust-venv/bin/pip install -r requirements.txt --quiet
+                                
+                                # Run Locust tests against localhost:9090
+                                /opt/locust-venv/bin/locust \
+                                    --headless \
+                                    --host=http://localhost:9090 \
+                                    --users 10 \
+                                    --spawn-rate 2 \
+                                    --run-time 30s \
+                                    --loglevel WARNING \
+                                    --autostart
+                                
+                                # Kill port-forward
+                                kill \$PORT_FORWARD_PID || true
+                            """
+                        }
                     }
                 }
             }

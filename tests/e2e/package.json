@@ -3,20 +3,8 @@
   "version": "1.0.0",
   "description": "E2E tests for e-commerce microservices using Cypress",
   "scripts": {
-    "cy:open": "cypress open",
-    "cy:run": "cypress run",
-    "cy:run:headless": "cypress run --headless",
-    "test": "cypress run",
-    "test:headed": "cypress run --headed --browser chrome"
+    "test": "cypress run"
   },
-  "keywords": [
-    "cypress",
-    "e2e",
-    "microservices",
-    "testing"
-  ],
-  "author": "",
-  "license": "ISC",
   "devDependencies": {
     "cypress": "^13.6.0"
   }
