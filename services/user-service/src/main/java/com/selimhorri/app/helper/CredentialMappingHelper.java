@@ -11,7 +11,7 @@ public interface CredentialMappingHelper {
 		return CredentialDto.builder()
 				.credentialId(credential.getCredentialId())
 				.username(credential.getUsername())
-				.password(credential.getPassword())
+				// .password(credential.getPassword()) // SECURITY: Never expose passwords in responses
 				.roleBasedAuthority(credential.getRoleBasedAuthority())
 				.isEnabled(credential.getIsEnabled())
 				.isAccountNonExpired(credential.getIsAccountNonExpired())
@@ -42,11 +42,6 @@ public interface CredentialMappingHelper {
 				.user(
 						User.builder()
 							.userId(credentialDto.getUserDto().getUserId())
-							.firstName(credentialDto.getUserDto().getFirstName())
-							.lastName(credentialDto.getUserDto().getLastName())
-							.imageUrl(credentialDto.getUserDto().getImageUrl())
-							.email(credentialDto.getUserDto().getEmail())
-							.phone(credentialDto.getUserDto().getPhone())
 							.build())
 				.build();
 	}

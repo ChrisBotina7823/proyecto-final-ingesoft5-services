@@ -8,25 +8,30 @@ import com.selimhorri.app.dto.UserDto;
 public interface UserMappingHelper {
 	
 	public static UserDto map(final User user) {
-		return UserDto.builder()
+		UserDto.UserDtoBuilder userDtoBuilder = UserDto.builder()
 				.userId(user.getUserId())
 				.firstName(user.getFirstName())
 				.lastName(user.getLastName())
 				.imageUrl(user.getImageUrl())
 				.email(user.getEmail())
-				.phone(user.getPhone())
-				.credentialDto(
-						CredentialDto.builder()
-							.credentialId(user.getCredential().getCredentialId())
-							.username(user.getCredential().getUsername())
-							.password(user.getCredential().getPassword())
-							.roleBasedAuthority(user.getCredential().getRoleBasedAuthority())
-							.isEnabled(user.getCredential().getIsEnabled())
-							.isAccountNonExpired(user.getCredential().getIsAccountNonExpired())
-							.isAccountNonLocked(user.getCredential().getIsAccountNonLocked())
-							.isCredentialsNonExpired(user.getCredential().getIsCredentialsNonExpired())
-							.build())
-				.build();
+				.phone(user.getPhone());
+		
+		// Solo mapear credential si existe (no es null)
+		if (user.getCredential() != null) {
+			userDtoBuilder.credentialDto(
+					CredentialDto.builder()
+						.credentialId(user.getCredential().getCredentialId())
+						.username(user.getCredential().getUsername())
+						.password(user.getCredential().getPassword())
+						.roleBasedAuthority(user.getCredential().getRoleBasedAuthority())
+						.isEnabled(user.getCredential().getIsEnabled())
+						.isAccountNonExpired(user.getCredential().getIsAccountNonExpired())
+						.isAccountNonLocked(user.getCredential().getIsAccountNonLocked())
+						.isCredentialsNonExpired(user.getCredential().getIsCredentialsNonExpired())
+						.build());
+		}
+		
+		return userDtoBuilder.build();
 	}
 	
 	public static User map(final UserDto userDto) {
