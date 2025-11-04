@@ -218,9 +218,8 @@ pipeline {
                             export HTTPS_PROXY=
                             export NO_PROXY=*
                             
-                            # Run Cypress tests (without colors for cleaner logs)
-                            NO_COLOR=1 npx cypress run \
-                                --config baseUrl=${API_GATEWAY_URL} \
+                            # Run Cypress tests with correct baseUrl
+                            NO_COLOR=1 CYPRESS_baseUrl=${API_GATEWAY_URL} npx cypress run \
                                 --config video=false,screenshotOnRunFailure=false
                         """
                     }
