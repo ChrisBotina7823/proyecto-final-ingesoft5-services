@@ -64,6 +64,7 @@ pipeline {
             steps {
                 script {
                     sh 'chmod +x mvnw'
+                    sh './mvnw -N clean install'
                     sh './mvnw clean verify'
                 }
             }
