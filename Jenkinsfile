@@ -64,11 +64,9 @@ pipeline {
             steps {
                 script {
                     sh 'chmod +x mvnw'
-                    sh 'du -sh ~/.m2/repository 2>/dev/null || echo "Maven cache: empty"'
-                    sh './mvnw -N install -DskipTests'
-                    sh './mvnw clean verify'
-                    sh 'du -sh ~/.m2/repository'
-                }
+                    sh './mvnw -N install -DskipTests -Dmaven.repo.local=/var/jenkins_home/.m2'
+                    sh './mvnw clean verify -Dmaven.repo.local=/var/jenkins_home/.m2'
+                }   
             }
         }
         
