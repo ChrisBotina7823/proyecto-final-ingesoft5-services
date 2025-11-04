@@ -200,15 +200,21 @@ pipeline {
             // }
             steps {
                 script {
-                    dir('tests/e2e') {
+                    // Copy tests to workspace to avoid read-only issues
+                    sh """
+                        mkdir -p /tmp/e2e-tests
+                        cp -r tests/e2e/* /tmp/e2e-tests/
+                    """
+                    
+                    dir('/tmp/e2e-tests') {
                         sh """
                             echo "Running E2E tests against: ${API_GATEWAY_URL}"
                             
                             # Install dependencies (cached in volume)
                             npm ci --prefer-offline --no-audit
                             
-                            # Run Cypress tests
-                            npx cypress run \
+                            # Run Cypress tests (without colors for cleaner logs)
+                            NO_COLOR=1 npx cypress run \
                                 --config baseUrl=${API_GATEWAY_URL} \
                                 --config video=false,screenshotOnRunFailure=false
                         """
