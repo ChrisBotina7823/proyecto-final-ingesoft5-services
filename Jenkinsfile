@@ -64,8 +64,9 @@ pipeline {
             steps {
                 script {
                     sh 'chmod +x mvnw'
-                    sh './mvnw clean verify'
-                }
+                    sh './mvnw -N install -DskipTests -Dmaven.repo.local=/var/jenkins_home/.m2'
+                    sh './mvnw clean verify -Dmaven.repo.local=/var/jenkins_home/.m2'
+                }   
             }
         }
         
