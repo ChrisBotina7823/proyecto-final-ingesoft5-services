@@ -39,6 +39,7 @@ pipeline {
     environment {
         DOCKER_REGISTRY = "${env.DOCKER_REGISTRY ?: 'ghcr.io/chrisbotina7823'}"
         GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        API_GATEWAY_URL = "${env.API_GATEWAY_URL ?: 'http://host.docker.internal:8080'}"
     }
     
     options {
@@ -61,6 +62,11 @@ pipeline {
         }
         
         stage('Build and Test Services') {
+        
+            when {
+                expression { isProduction() }
+            }
+
             steps {
                 script {
                     sh 'chmod +x mvnw'
@@ -71,6 +77,12 @@ pipeline {
         }
         
         stage('Code Quality Analysis') {
+            
+            when {
+                expression { isProduction() }
+            }
+
+
             steps {
                 script {
                     withCredentials([usernamePassword(
@@ -137,17 +149,12 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
-            when {
-                expression { isProduction() }
-            }
+            // when {
+            //     expression { isProduction() }
+            // }
             steps {
                 script {
                     def changedServices = getChangedServices()
-                    
-                    if (changedServices.isEmpty()) {
-                        echo "No deployments needed"
-                        return
-                    }
                     
                     withCredentials([
                         file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG'),
@@ -181,6 +188,62 @@ pipeline {
                                 --all \
                                 --namespace=ecommerce-prod \
                                 --timeout=300s || true
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('E2E Tests') {
+            // when {
+            //     expression { isProduction() }
+            // }
+            steps {
+                script {
+                    dir('tests/e2e') {
+                        sh """
+                            echo "Running E2E tests against: ${API_GATEWAY_URL}"
+                            
+                            # Install Cypress dependencies
+                            npm install
+                            
+                            # Run Cypress tests in headless mode
+                            npx cypress run \
+                                --config baseUrl=${API_GATEWAY_URL} \
+                                --env apiUrl=${API_GATEWAY_URL}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Performance Tests') {
+            // when {
+            //     expression { isProduction() }
+            // }
+            steps {
+                script {
+                    dir('tests/performance') {
+                        sh """
+                            echo "Running performance tests against: ${API_GATEWAY_URL}"
+                            
+                            # Install Locust dependencies in virtual environment
+                            /opt/locust-venv/bin/pip install -r requirements.txt
+                            
+                            # Create reports directory
+                            mkdir -p reports
+                            
+                            # Run Locust performance tests (headless mode)
+                            /opt/locust-venv/bin/locust \
+                                --headless \
+                                --host=${API_GATEWAY_URL} \
+                                --users 100 \
+                                --spawn-rate 10 \
+                                --run-time 2m \
+                                --html reports/load-test-report.html \
+                                --csv reports/load-test \
+                                --logfile reports/load-test.log \
+                                --loglevel INFO
                         """
                     }
                 }
