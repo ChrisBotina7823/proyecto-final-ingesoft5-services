@@ -41,3 +41,5 @@ build/
 **/.terraform/
 **/.terraform.lock.hcl
 **/terraform.tfvars
+
+**/kubeconfig.base64
