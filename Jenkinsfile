@@ -195,9 +195,9 @@ pipeline {
         }
 
         stage('E2E Tests') {
-            // when {
-            //     expression { isProduction() }
-            // }
+            when {
+                expression { isProduction() }
+            }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
@@ -276,7 +276,8 @@ pipeline {
                                     --users 10 \
                                     --spawn-rate 2 \
                                     --run-time 30s \
-                                    --loglevel WARNING
+                                    --loglevel WARNING \
+                                    --autostart
                                 
                                 # Kill port-forward
                                 kill \$PORT_FORWARD_PID || true
