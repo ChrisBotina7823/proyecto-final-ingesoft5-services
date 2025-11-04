@@ -149,8 +149,8 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
-             when {
-                 expression { isProduction() }
+            when {
+                expression { isProduction() }
             }
             steps {
                 script {
@@ -243,9 +243,9 @@ pipeline {
         }
 
         stage('Performance Tests') {
-            // when {
-            //     expression { isProduction() }
-            // }
+            when {
+                expression { isProduction() }
+            }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
