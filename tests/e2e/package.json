@@ -6,7 +6,7 @@
     "cy:open": "cypress open",
     "cy:run": "cypress run",
     "cy:run:headless": "cypress run --headless",
-    "test": "cypress run",
+    "test": "cypress run --reporter junit --reporter-options mochaFile=results/cypress-results-[hash].xml,toConsole=true",
     "test:headed": "cypress run --headed --browser chrome"
   },
   "keywords": [
@@ -18,6 +18,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "cypress": "^13.6.0"
+    "cypress": "^13.6.0",
+    "cypress-multi-reporters": "^1.6.4",
+    "mocha": "^10.2.0",
+    "mocha-junit-reporter": "^2.2.1"
   }
 }

@@ -15,8 +15,10 @@ module.exports = defineConfig({
     },
     viewportWidth: 1280,
     viewportHeight: 720,
-    video: false,
+    video: true,
+    videosFolder: 'cypress/videos',
     screenshotOnRunFailure: true,
+    screenshotsFolder: 'cypress/screenshots',
     defaultCommandTimeout: 10000,
     requestTimeout: 15000,
     responseTimeout: 15000,
@@ -28,4 +30,8 @@ module.exports = defineConfig({
       apiUrl: 'http://localhost:8080'
     }
   },
+  reporter: 'cypress-multi-reporters',
+  reporterOptions: {
+    configFile: 'reporter-config.json'
+  }
 })
