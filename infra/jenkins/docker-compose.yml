@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   jenkins:
     build:
@@ -13,19 +11,24 @@ services:
       - "50000:50000"    # Jenkins agent communication
     volumes:
       - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker access
-      - ../jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro
-      - ../../:/workspace:ro  # Mount project root (read-only for Jenkins to access repo)
+      - ../../:/workspace:ro
+      - ./casc.yaml:/var/jenkins_home/casc.yaml
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
       - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
       - DOCKER_HOST=unix:///var/run/docker.sock
       - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
-      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin123}
+      - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-changeme}
       - DOCKER_REGISTRY_USER=${DOCKER_REGISTRY_USER:-admin}
       - DOCKER_REGISTRY_PASS=${DOCKER_REGISTRY_PASS:-admin}
-      - KUBECONFIG_CONTENT_BASE64=${KUBECONFIG_CONTENT_BASE64:-}
+      - KUBECONFIG_BASE64=${KUBECONFIG_BASE64:-}
+      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - SONAR_HOST_URL=http://sonarqube:9000
+      - SONAR_ADMIN_PASSWORD=${SONAR_ADMIN_PASSWORD:-admin}
     networks:
       - jenkins-network
     restart: unless-stopped
@@ -36,25 +39,78 @@ services:
       retries: 5
       start_period: 120s
 
-  # Docker-in-Docker service for building images
-  docker-dind:
-    image: docker:24-dind
-    container_name: jenkins-docker
-    privileged: true
+  # SonarQube for code quality analysis
+  sonarqube:
+    image: sonarqube:9.9-community
+    container_name: sonarqube
+    depends_on:
+      - sonarqube-db
+    ports:
+      - "9000:9000"
     environment:
-      - DOCKER_TLS_CERTDIR=/certs
+      - SONAR_JDBC_URL=jdbc:postgresql://sonarqube-db:5432/sonar
+      - SONAR_JDBC_USERNAME=sonar
+      - SONAR_JDBC_PASSWORD=${SONAR_DB_PASSWORD:-sonar}
     volumes:
-      - jenkins-docker-certs:/certs/client
-      - jenkins_home:/var/jenkins_home
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_extensions:/opt/sonarqube/extensions
+      - sonarqube_logs:/opt/sonarqube/logs
     networks:
       - jenkins-network
     restart: unless-stopped
-    command: --storage-driver=overlay2
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # PostgreSQL database for SonarQube
+  sonarqube-db:
+    image: postgres:15-alpine
+    container_name: sonarqube-db
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=${SONAR_DB_PASSWORD:-sonar}
+      - POSTGRES_DB=sonar
+    volumes:
+      - sonarqube_db:/var/lib/postgresql/data
+    networks:
+      - jenkins-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # SonarQube initialization service
+  sonar-init:
+    image: curlimages/curl:latest
+    container_name: sonar-init
+    depends_on:
+      - sonarqube
+    environment:
+      - SONAR_ADMIN_PASSWORD=${SONAR_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./init-sonar.sh:/init-sonar.sh:ro
+    networks:
+      - jenkins-network
+    entrypoint: ["/bin/sh", "/init-sonar.sh"]
+    restart: "no"
 
 volumes:
   jenkins_home:
     driver: local
   jenkins-docker-certs:
+    driver: local
+  sonarqube_data:
+    driver: local
+  sonarqube_extensions:
+    driver: local
+  sonarqube_logs:
+    driver: local
+  sonarqube_db:
     driver: local
 
 networks:
