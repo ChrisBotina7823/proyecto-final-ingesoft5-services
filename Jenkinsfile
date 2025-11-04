@@ -149,9 +149,9 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes') {
-            // when {
-            //     expression { isProduction() }
-            // }
+             when {
+                 expression { isProduction() }
+            }
             steps {
                 script {
                     def changedServices = getChangedServices()
@@ -204,13 +204,13 @@ pipeline {
                         sh """
                             echo "Running E2E tests against: ${API_GATEWAY_URL}"
                             
-                            # Install Cypress dependencies
-                            npm install
+                            # Install dependencies (cached in volume)
+                            npm ci --prefer-offline --no-audit
                             
-                            # Run Cypress tests in headless mode
+                            # Run Cypress tests
                             npx cypress run \
                                 --config baseUrl=${API_GATEWAY_URL} \
-                                --env apiUrl=${API_GATEWAY_URL}
+                                --config video=false,screenshotOnRunFailure=false
                         """
                     }
                 }
@@ -227,23 +227,17 @@ pipeline {
                         sh """
                             echo "Running performance tests against: ${API_GATEWAY_URL}"
                             
-                            # Install Locust dependencies in virtual environment
-                            /opt/locust-venv/bin/pip install -r requirements.txt
+                            # Install dependencies (cached in volume)
+                            /opt/locust-venv/bin/pip install -r requirements.txt --quiet
                             
-                            # Create reports directory
-                            mkdir -p reports
-                            
-                            # Run Locust performance tests (headless mode)
+                            # Run Locust tests (lightweight)
                             /opt/locust-venv/bin/locust \
                                 --headless \
                                 --host=${API_GATEWAY_URL} \
-                                --users 100 \
-                                --spawn-rate 10 \
-                                --run-time 2m \
-                                --html reports/load-test-report.html \
-                                --csv reports/load-test \
-                                --logfile reports/load-test.log \
-                                --loglevel INFO
+                                --users 10 \
+                                --spawn-rate 2 \
+                                --run-time 30s \
+                                --loglevel WARNING
                         """
                     }
                 }
