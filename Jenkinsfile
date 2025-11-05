@@ -172,12 +172,16 @@ pipeline {
                         
                         sh "kubectl apply -k infra/kubernetes/"
                         
+                        echo "Waiting for all pods to be ready (this may take up to 20 minutes)..."
                         sh """
                             kubectl wait --for=condition=ready pod \
                                 --all \
                                 --namespace=ecommerce-prod \
-                                --timeout=300s || true
+                                --timeout=1200s
                         """
+                        
+                        echo "All pods are ready!"
+                        sh "kubectl get pods -n ecommerce-prod"
                     }
                 }
             }
@@ -206,13 +210,15 @@ pipeline {
                                 
                                 # Wait for port-forward to be ready
                                 echo "Waiting for port-forward to be ready..."
-                                for i in {1..30}; do
+                                i=1
+                                while [ \$i -le 30 ]; do
                                     if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
                                         echo "Port-forward ready!"
                                         break
                                     fi
                                     echo "Attempt \$i/30: Port-forward not ready yet..."
                                     sleep 2
+                                    i=\$((i + 1))
                                 done
                                 
                                 # Install dependencies (cached in volume)
@@ -247,12 +253,16 @@ pipeline {
                                 PORT_FORWARD_PID=\$!
                                 
                                 # Wait for port-forward to be ready
-                                for i in {1..30}; do
+                                echo "Waiting for port-forward to be ready..."
+                                i=1
+                                while [ \$i -le 30 ]; do
                                     if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
                                         echo "Port-forward ready!"
                                         break
                                     fi
+                                    echo "Attempt \$i/30: Port-forward not ready yet..."
                                     sleep 2
+                                    i=\$((i + 1))
                                 done
                                 
                                 # Install dependencies (cached in volume)
