@@ -55,6 +55,9 @@ mv /opt/sonar-scanner-7.2.0.5079-linux-x64 /opt/sonar-scanner && \
 ln -s /opt/sonar-scanner/bin/sonar-scanner /usr/local/bin/sonar-scanner && \
 rm /tmp/sonar-scanner.zip
 
+# Install Trivy (for security vulnerability scanning)
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.0
+
 # Install Node.js and npm (for Cypress E2E tests)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 apt-get install -y --no-install-recommends nodejs && \

@@ -71,6 +71,35 @@ pipeline {
             }
         }
         
+        stage('Trivy Filesystem Scan') {
+            steps {
+                script {
+                    echo "Running Trivy filesystem vulnerability scan..."
+                    sh """
+                        trivy fs \
+                            --severity HIGH,CRITICAL \
+                            --format json \
+                            --output trivy-fs-report.json \
+                            --timeout 10m \
+                            --skip-dirs "**/target,**/node_modules,**/.git,**/.mvn" \
+                            .
+                    """
+                    
+                    // Archive report as artifact
+                    archiveArtifacts artifacts: 'trivy-fs-report.json', allowEmptyArchive: true
+                    
+                    // Generate human-readable report
+                    sh """
+                        trivy fs \
+                            --severity HIGH,CRITICAL \
+                            --format table \
+                            --skip-dirs "**/target,**/node_modules,**/.git,**/.mvn" \
+                            .
+                    """
+                }
+            }
+        }
+        
         stage('Code Quality Analysis') {
             steps {
                 script {
@@ -133,6 +162,92 @@ pipeline {
                     }
                     
                     parallel parallelBuilds
+                }
+            }
+        }
+        
+        stage('Trivy Image Scan') {
+            when {
+                expression { isProduction() }
+            }
+            steps {
+                script {
+                    def changedServices = getChangedServices()
+                    
+                    if (changedServices.isEmpty()) {
+                        echo "No service changes detected, skipping image scan"
+                        return
+                    }
+                    
+                    echo "Scanning Docker images for vulnerabilities with Trivy..."
+                    
+                    def parallelScans = [:]
+                    def scanResults = [:]
+                    
+                    changedServices.each { service ->
+                        def serviceName = service
+                        parallelScans[serviceName] = {
+                            def imageTag = "${DOCKER_REGISTRY}/${serviceName}:${GIT_COMMIT_SHORT}"
+                            
+                            echo "Scanning image: ${imageTag}"
+                            
+                            // Scan image and save report
+                            sh """
+                                trivy image \
+                                    --severity HIGH,CRITICAL \
+                                    --format json \
+                                    --output trivy-${serviceName}-report.json \
+                                    --timeout 10m \
+                                    ${imageTag}
+                            """
+                            
+                            // Generate human-readable report
+                            sh """
+                                trivy image \
+                                    --severity HIGH,CRITICAL \
+                                    --format table \
+                                    ${imageTag}
+                            """
+                            
+                            // Check for critical vulnerabilities and fail if policy is strict
+                            def exitCode = sh(
+                                script: """
+                                    trivy image \
+                                        --severity CRITICAL \
+                                        --exit-code 1 \
+                                        --timeout 10m \
+                                        ${imageTag}
+                                """,
+                                returnStatus: true
+                            )
+                            
+                            scanResults[serviceName] = exitCode
+                            
+                            if (exitCode != 0) {
+                                echo "WARNING: Critical vulnerabilities found in ${serviceName}"
+                            } else {
+                                echo "No critical vulnerabilities found in ${serviceName}"
+                            }
+                        }
+                    }
+                    
+                    parallel parallelScans
+                    
+                    // Archive all scan reports
+                    archiveArtifacts artifacts: 'trivy-*-report.json', allowEmptyArchive: true
+                    
+                    // Check if any service has critical vulnerabilities
+                    def criticalFound = scanResults.any { service, exitCode -> exitCode != 0 }
+                    
+                    if (criticalFound) {
+                        def affectedServices = scanResults.findAll { service, exitCode -> exitCode != 0 }.keySet()
+                        echo "SECURITY WARNING: Critical vulnerabilities found in: ${affectedServices.join(', ')}"
+                        
+                        // Uncomment to fail the build on critical vulnerabilities
+                        // error("Critical vulnerabilities detected. Deployment blocked.")
+                    } else {
+                        echo "All images passed security scan"
+                    }
                 }
             }
         }
