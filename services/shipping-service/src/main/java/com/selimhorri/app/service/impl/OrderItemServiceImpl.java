@@ -18,6 +18,8 @@ import com.selimhorri.app.helper.OrderItemMappingHelper;
 import com.selimhorri.app.repository.OrderItemRepository;
 import com.selimhorri.app.service.OrderItemService;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,14 +39,49 @@ public class OrderItemServiceImpl implements OrderItemService {
 				.stream()
 					.map(OrderItemMappingHelper::map)
 					.map(o -> {
-						o.setProductDto(this.restTemplate.getForObject(AppConstant.DiscoveredDomainsApi
-								.PRODUCT_SERVICE_API_URL + "/" + o.getProductDto().getProductId(), ProductDto.class));
-						o.setOrderDto(this.restTemplate.getForObject(AppConstant.DiscoveredDomainsApi
-								.ORDER_SERVICE_API_URL + "/" + o.getOrderDto().getOrderId(), OrderDto.class));
+						o.setProductDto(getProductWithResilience(o.getProductDto().getProductId()));
+						o.setOrderDto(getOrderWithResilience(o.getOrderDto().getOrderId()));
 						return o;
 					})
 					.distinct()
 					.collect(Collectors.toUnmodifiableList());
+	}
+	
+	@CircuitBreaker(name = "productServiceCall", fallbackMethod = "getProductFallback")
+	@Retry(name = "productServiceCall")
+	private ProductDto getProductWithResilience(Integer productId) {
+		log.info("*** Calling Product Service for productId: {} *", productId);
+		return this.restTemplate.getForObject(
+			AppConstant.DiscoveredDomainsApi.PRODUCT_SERVICE_API_URL + "/" + productId, 
+			ProductDto.class
+		);
+	}
+	
+	@CircuitBreaker(name = "orderServiceCall", fallbackMethod = "getOrderFallback")
+	@Retry(name = "orderServiceCall")
+	private OrderDto getOrderWithResilience(Integer orderId) {
+		log.info("*** Calling Order Service for orderId: {} *", orderId);
+		return this.restTemplate.getForObject(
+			AppConstant.DiscoveredDomainsApi.ORDER_SERVICE_API_URL + "/" + orderId, 
+			OrderDto.class
+		);
+	}
+	
+	private ProductDto getProductFallback(Integer productId, Throwable t) {
+		log.error("*** Product Service unavailable for productId: {}. Using fallback. Error: {} *", 
+			productId, t.getMessage());
+		ProductDto fallback = new ProductDto();
+		fallback.setProductId(productId);
+		fallback.setProductTitle("Product Unavailable");
+		return fallback;
+	}
+	
+	private OrderDto getOrderFallback(Integer orderId, Throwable t) {
+		log.error("*** Order Service unavailable for orderId: {}. Using fallback. Error: {} *", 
+			orderId, t.getMessage());
+		OrderDto fallback = new OrderDto();
+		fallback.setOrderId(orderId);
+		return fallback;
 	}
 	
 	@Override
@@ -53,10 +90,8 @@ public class OrderItemServiceImpl implements OrderItemService {
 		return this.orderItemRepository.findById(orderItemId)
 				.map(OrderItemMappingHelper::map)
 				.map(o -> {
-					o.setProductDto(this.restTemplate.getForObject(AppConstant.DiscoveredDomainsApi
-							.PRODUCT_SERVICE_API_URL + "/" + o.getProductDto().getProductId(), ProductDto.class));
-					o.setOrderDto(this.restTemplate.getForObject(AppConstant.DiscoveredDomainsApi
-							.ORDER_SERVICE_API_URL + "/" + o.getOrderDto().getOrderId(), OrderDto.class));
+					o.setProductDto(getProductWithResilience(o.getProductDto().getProductId()));
+					o.setOrderDto(getOrderWithResilience(o.getOrderDto().getOrderId()));
 					return o;
 				})
 				.orElseThrow(() -> new OrderItemNotFoundException(String.format("OrderItem with id: %s not found", orderItemId)));

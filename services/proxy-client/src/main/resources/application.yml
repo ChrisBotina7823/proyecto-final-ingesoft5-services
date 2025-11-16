@@ -27,12 +27,79 @@ resilience4j:
         sliding-window-size: 10
         wait-duration-in-open-state: 5s
         sliding-window-type: COUNT_BASED
+      paymentService:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        sliding-window-size: 10
+        wait-duration-in-open-state: 10s
+        sliding-window-type: COUNT_BASED
+      orderService:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+      productService:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+      userService:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+  retry:
+    instances:
+      proxyService:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - feign.RetryableException
+      paymentService:
+        max-attempts: 3
+        wait-duration: 2s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - feign.RetryableException
+      orderService:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+      productService:
+        max-attempts: 2
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+      userService:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+
+togglz:
+  enabled: true
+  console:
+    enabled: true
+    secured: false
+    path: /togglz-console
+  feature-enums: com.selimhorri.app.config.feature.ProxyFeatures
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,togglz
   health:
     circuitbreakers:
       enabled: true

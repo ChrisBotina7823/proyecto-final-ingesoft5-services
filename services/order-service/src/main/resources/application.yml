@@ -28,11 +28,19 @@ resilience4j:
         wait-duration-in-open-state: 5s
         sliding-window-type: COUNT_BASED
 
+togglz:
+  enabled: true
+  console:
+    enabled: true
+    secured: false
+    path: /togglz-console
+  feature-enums: com.selimhorri.app.config.feature.OrderFeatures
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,togglz
   health:
     circuitbreakers:
       enabled: true

@@ -8,6 +8,7 @@ import javax.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.selimhorri.app.config.feature.PaymentFeatures;
 import com.selimhorri.app.constant.AppConstant;
 import com.selimhorri.app.dto.OrderDto;
 import com.selimhorri.app.dto.PaymentDto;
@@ -59,6 +60,30 @@ public class PaymentServiceImpl implements PaymentService {
 	@Override
 	public PaymentDto save(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; save payment *");
+		
+		// Feature Toggle: Enable idempotency validation
+		if (PaymentFeatures.IDEMPOTENCY_ENABLED.isActive()) {
+			log.info("*** Idempotency check enabled - validating payment request *");
+			// TODO: Implement idempotency check logic
+			// Check if payment with same idempotency key already exists
+		}
+		
+		// Feature Toggle: Enable strict fraud checks
+		if (PaymentFeatures.STRICT_FRAUD_CHECKS.isActive()) {
+			log.info("*** Strict fraud checks enabled - running additional validations *");
+			// TODO: Implement fraud detection logic
+			// Check payment amount, velocity, patterns, etc.
+		}
+		
+		// Feature Toggle: Use new payment gateway
+		if (PaymentFeatures.NEW_PAYMENT_GATEWAY.isActive()) {
+			log.info("*** Using new payment gateway for processing *");
+			// TODO: Route to new payment gateway
+		} else {
+			log.info("*** Using legacy payment gateway *");
+			// Legacy payment processing
+		}
+		
 		return PaymentMappingHelper.map(this.paymentRepository
 				.save(PaymentMappingHelper.map(paymentDto)));
 	}

@@ -43,3 +43,5 @@ build/
 **/terraform.tfvars
 
 **/kubeconfig.base64
+
+misc

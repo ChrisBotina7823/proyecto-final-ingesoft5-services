@@ -27,6 +27,38 @@ resilience4j:
         sliding-window-size: 10
         wait-duration-in-open-state: 5s
         sliding-window-type: COUNT_BASED
+      productServiceCall:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+      orderServiceCall:
+        register-health-indicator: true
+        failure-rate-threshold: 50
+        minimum-number-of-calls: 5
+        sliding-window-size: 10
+        wait-duration-in-open-state: 5s
+  retry:
+    instances:
+      shippingService:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+      productServiceCall:
+        max-attempts: 2
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+      orderServiceCall:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
 
 management:
   endpoints:
