@@ -1,0 +1,46 @@
+---
+- name: Create Jenkins directory
+  file:
+    path: "{{ jenkins_deploy_path }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Copy Jenkins files
+  synchronize:
+    src: "{{ jenkins_source_path }}/"
+    dest: "{{ jenkins_deploy_path }}/"
+    delete: no
+    recursive: yes
+
+- name: Set ownership
+  file:
+    path: "{{ jenkins_deploy_path }}"
+    owner: ubuntu
+    group: ubuntu
+    recurse: yes
+
+- name: Stop existing containers
+  shell: sg docker -c "docker compose down"
+  args:
+    chdir: "{{ jenkins_deploy_path }}"
+  become: yes
+  become_user: ubuntu
+  ignore_errors: yes
+
+- name: Build and start Jenkins
+  shell: sg docker -c "docker compose up -d --build"
+  args:
+    chdir: "{{ jenkins_deploy_path }}"
+  become: yes
+  become_user: ubuntu
+
+- name: Wait for Jenkins
+  uri:
+    url: "http://localhost:8090/login"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10

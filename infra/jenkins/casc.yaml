@@ -55,8 +55,8 @@ credentials:
               scope: GLOBAL
               id: "kubeconfig"
               fileName: "kubeconfig"
-              secretBytes: ${KUBECONFIG_BASE64}
-              description: "Local Kubernetes Cluster Config"
+              secretBytes: ${file:/var/jenkins_home/kubeconfig.base64}
+              description: "Kubernetes Cluster Config"
               
           - usernamePassword:
               scope: GLOBAL

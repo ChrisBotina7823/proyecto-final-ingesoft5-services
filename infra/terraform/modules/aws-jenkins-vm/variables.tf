@@ -56,6 +56,13 @@ variable "admin_username" {
   default     = "ubuntu"  # AWS default
 }
 
+variable "admin_password" {
+  description = "Admin password for VM"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "ssh_public_key_path" {
   description = "Path to SSH public key file"
   type        = string

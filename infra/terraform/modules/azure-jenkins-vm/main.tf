@@ -48,7 +48,7 @@ resource "azurerm_network_security_group" "jenkins" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "8080"
+    destination_port_range     = "8090"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
@@ -155,7 +155,8 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
 
   computer_name                   = "jenkins"
   admin_username                  = var.admin_username
-  disable_password_authentication = true
+  admin_password                  = var.admin_password
+  disable_password_authentication = false
 
   admin_ssh_key {
     username   = var.admin_username

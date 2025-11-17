@@ -73,8 +73,8 @@ resource "aws_security_group" "jenkins" {
   # Jenkins UI
   ingress {
     description = "Jenkins UI"
-    from_port   = 8080
-    to_port     = 8080
+    from_port   = 8090
+    to_port     = 8090
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -205,9 +205,11 @@ resource "aws_instance" "jenkins" {
     encrypted             = true
   }
 
-  user_data = templatefile("${path.module}/user-data.sh", {
-    environment = var.environment
-  })
+  user_data = <<-EOF
+    #!/bin/bash
+    apt-get update
+    apt-get upgrade -y
+  EOF
 
   metadata_options {
     http_endpoint               = "enabled"

@@ -37,6 +37,7 @@ services:
       - cypress_cache:/var/jenkins_home/.cache/Cypress
       - pip_cache:/var/jenkins_home/.cache/pip
       - jenkins-docker-certs:/certs/client:ro
+      - ./kubeconfig.base64:/var/jenkins_home/kubeconfig.base64:ro
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dhudson.security.csrf.GlobalCrumbIssuerConfiguration.DISABLE_CSRF_PROTECTION=true
       - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
@@ -48,7 +49,6 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-changeme}
       - DOCKER_REGISTRY_USER=${DOCKER_REGISTRY_USER:-admin}
       - DOCKER_REGISTRY_PASS=${DOCKER_REGISTRY_PASS:-admin}
-      - KUBECONFIG_BASE64=${KUBECONFIG_BASE64:-}
       - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
       - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
       - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
