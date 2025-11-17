@@ -15,6 +15,22 @@ spring:
     - dev
 
 resilience4j:
+  # Order: Retry (outer) → CircuitBreaker (middle) → Bulkhead (inner) → Call
+  retry:
+    instances:
+      orderService:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+          - java.net.SocketTimeoutException
+          - java.io.IOException
+        ignore-exceptions:
+          - io.github.resilience4j.bulkhead.BulkheadFullException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
   circuitbreaker:
     instances:
       orderService:
@@ -25,8 +41,13 @@ resilience4j:
         minimum-number-of-calls: 5
         permitted-number-of-calls-in-half-open-state: 3
         sliding-window-size: 10
-        wait-duration-in-open-state: 5s
+        wait-duration-in-open-state: 10s
         sliding-window-type: COUNT_BASED
+  bulkhead:
+    instances:
+      orderService:
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
 
 management:
   endpoints:
