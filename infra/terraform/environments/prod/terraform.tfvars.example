@@ -1,0 +1,21 @@
+# Production environment configuration
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git!
+
+# AWS credentials
+aws_access_key = "your-aws-access-key"
+aws_secret_key = "your-aws-secret-key"
+
+# Azure Service Principal credentials
+subscription_id = "your-subscription-id"
+client_id       = "your-client-id"
+client_secret   = "your-client-secret"
+tenant_id       = "your-tenant-id"
+
+# Optional: Override default SSH public key path
+# ssh_public_key_path = "~/.ssh/id_rsa.pub"
+
+# Optional: Override defaults
+# aws_region     = "us-east-1"
+# azure_location = "East US"
+
