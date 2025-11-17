@@ -67,12 +67,13 @@ credentials:
 
 unclassified:
   location:
-    url: "http://localhost:8090/"
+    url: "${JENKINS_URL}"
     
   gitHubPluginConfig:
     configs:
       - name: "GitHub"
         credentialsId: "github-token"
+        manageHooks: true
         
   timestamper:
     allPipelines: true
@@ -82,16 +83,19 @@ unclassified:
       - name: "SonarQube"
         serverUrl: "http://sonarqube:9000"
         credentialsId: "sonarqube-admin"
+        
+  gitHubConfiguration:
+    apiRateLimitChecker: ThrottleOnOver
 
 jobs:
   - script: >
       multibranchPipelineJob('ecommerce-microservices') {
         branchSources {
-          git {
+          github {
             id('ecommerce-repo')
-            remote('https://github.com/ChrisBotina7823/proyecto-final-ingesoft5-services.git')
-            credentialsId('github-token')
-            includes('main develop')
+            repoOwner('ChrisBotina7823')
+            repository('proyecto-final-ingesoft5-services')
+            scanCredentialsId('github-token')
           }
         }
         orphanedItemStrategy {
@@ -101,7 +105,7 @@ jobs:
         }
         triggers {
           periodicFolderTrigger {
-            interval('5m')
+            interval('1m')
           }
         }
       }

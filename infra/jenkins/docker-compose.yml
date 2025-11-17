@@ -1,4 +1,21 @@
 services:
+  # Docker-in-Docker service for building images
+  docker-dind:
+    image: docker:24-dind
+    container_name: jenkins-docker
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+      - DOCKER_TLS_SAN=DNS:docker-dind,DNS:localhost,DNS:jenkins-docker
+    volumes:
+      - jenkins-docker-certs:/certs/client
+      - jenkins_home:/var/jenkins_home
+      - docker_data:/var/lib/docker
+    networks:
+      - jenkins-network
+    restart: unless-stopped
+    command: --storage-driver=overlay2
+
   jenkins:
     build:
       context: .
@@ -6,6 +23,8 @@ services:
     container_name: jenkins-casc
     privileged: true
     user: root
+    depends_on:
+      - docker-dind
     ports:
       - "8090:8080"      # Jenkins UI
       - "50000:50000"    # Jenkins agent communication
@@ -13,10 +32,17 @@ services:
       - jenkins_home:/var/jenkins_home
       - ../../:/workspace:ro
       - ./casc.yaml:/var/jenkins_home/casc.yaml
+      - maven_repo:/var/jenkins_home/.m2
+      - npm_cache:/var/jenkins_home/.npm
+      - cypress_cache:/var/jenkins_home/.cache/Cypress
+      - pip_cache:/var/jenkins_home/.cache/pip
+      - jenkins-docker-certs:/certs/client:ro
     environment:
-      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dhudson.security.csrf.GlobalCrumbIssuerConfiguration.DISABLE_CSRF_PROTECTION=true
       - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
-      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DOCKER_HOST=tcp://docker-dind:2376
+      - DOCKER_CERT_PATH=/certs/client
+      - DOCKER_TLS_VERIFY=1
       - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
       - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-changeme}
@@ -29,6 +55,10 @@ services:
       - AZURE_TENANT_ID=${AZURE_TENANT_ID}
       - SONAR_HOST_URL=http://sonarqube:9000
       - SONAR_ADMIN_PASSWORD=${SONAR_ADMIN_PASSWORD:-admin}
+      - JENKINS_URL=${JENKINS_URL:-http://localhost:8090}
+      - API_GATEWAY_URL=${API_GATEWAY_URL:-http://host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - jenkins-network
     restart: unless-stopped
@@ -104,6 +134,8 @@ volumes:
     driver: local
   jenkins-docker-certs:
     driver: local
+  docker_data:
+    driver: local
   sonarqube_data:
     driver: local
   sonarqube_extensions:
@@ -111,6 +143,14 @@ volumes:
   sonarqube_logs:
     driver: local
   sonarqube_db:
+    driver: local
+  maven_repo:
+    driver: local
+  npm_cache:
+    driver: local
+  cypress_cache:
+    driver: local
+  pip_cache:
     driver: local
 
 networks:
