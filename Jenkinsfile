@@ -160,7 +160,6 @@ pipeline {
                             }
                         }
                     }
-                    
                     parallel parallelBuilds
                 }
             }
@@ -275,7 +274,7 @@ pipeline {
                                 --docker-server=ghcr.io \
                                 --docker-username=\${DOCKER_USER} \
                                 --docker-password=\${DOCKER_PASS} \
-                                --namespace=ecommerce-prod \
+                                --namespace=prod \
                                 --dry-run=client -o yaml | kubectl apply -f -
                         """
                         
@@ -291,12 +290,12 @@ pipeline {
                         sh """
                             kubectl wait --for=condition=ready pod \
                                 --all \
-                                --namespace=ecommerce-prod \
+                                --namespace=prod \
                                 --timeout=1200s
                         """
                         
                         echo "All pods are ready!"
-                        sh "kubectl get pods -n ecommerce-prod"
+                        sh "kubectl get pods -n prod"
                     }
                 }
             }
@@ -320,7 +319,7 @@ pipeline {
                                 echo "Setting up port-forward to API Gateway..."
                                 
                                 # Start port-forward in background (using port 9090 to avoid conflict with Jenkins)
-                                kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
+                                kubectl port-forward svc/api-gateway 9090:8080 -n prod &
                                 PORT_FORWARD_PID=\$!
                                 
                                 # Wait for port-forward to be ready
@@ -364,7 +363,7 @@ pipeline {
                                 echo "Setting up port-forward to API Gateway..."
                                 
                                 # Start port-forward in background (using port 9090 to avoid conflict with Jenkins)
-                                kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
+                                kubectl port-forward svc/api-gateway 9090:8080 -n prod &
                                 PORT_FORWARD_PID=\$!
                                 
                                 # Wait for port-forward to be ready
