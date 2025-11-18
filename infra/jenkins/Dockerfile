@@ -44,6 +44,14 @@ RUN tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin && \
 chmod +x /usr/local/bin/kustomize && \
 rm /tmp/kustomize.tar.gz
 
+# Install Helm 3 (for Kubernetes package management)
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Add Helm repositories for observability stack
+RUN helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && \
+    helm repo add grafana https://grafana.github.io/helm-charts && \
+    helm repo update
+
 # Install Azure CLI (separate layer, rarely changes)
 # RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
 #     rm -rf /var/lib/apt/lists/*

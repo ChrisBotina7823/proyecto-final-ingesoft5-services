@@ -2,14 +2,8 @@ def isProduction() {
     return env.BRANCH_NAME == 'main'
 }
 
-def getChangedServices() {
-    def changedFiles = sh(
-        script: 'git diff --name-only HEAD~1 HEAD',
-        returnStdout: true
-    ).trim().split('\n')
-    
-    def services = [] as Set
-    def allServices = [
+def getAllServices() {
+    return [
         "service-discovery",
         "cloud-config",
         "api-gateway",
@@ -21,6 +15,16 @@ def getChangedServices() {
         "shipping-service",
         "payment-service"
     ]
+}
+
+def getChangedServices() {
+    def changedFiles = sh(
+        script: 'git diff --name-only HEAD~1 HEAD',
+        returnStdout: true
+    ).trim().split('\n')
+    
+    def services = [] as Set
+    def allServices = getAllServices()
     
     changedFiles.each { file ->
         allServices.each { service ->
@@ -60,7 +64,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Build and Test Services') {
             steps {
                 script {
@@ -125,7 +129,7 @@ pipeline {
             }
             steps {
                 script {
-                    def changedServices = getChangedServices()
+                    def changedServices = getAllServices()
                     
                     if (changedServices.isEmpty()) {
                         echo "No service changes detected"
@@ -171,7 +175,7 @@ pipeline {
             }
             steps {
                 script {
-                    def changedServices = getChangedServices()
+                    def changedServices = getAllServices()
                     
                     if (changedServices.isEmpty()) {
                         echo "No service changes detected, skipping image scan"
@@ -250,6 +254,66 @@ pipeline {
                 }
             }
         }
+        stage('Deploy Observability Stack') {
+            when {
+                expression { isProduction() }
+            }
+            steps {
+                script {
+                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                        echo "Deploying Observability Stack (Prometheus, Grafana, Loki)..."
+                        
+                        // Create namespace
+                        sh "kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -"
+                        
+                        // Deploy/Upgrade Prometheus + Grafana (kube-prometheus-stack)
+                        sh """
+                            if helm list -n observability | grep -q "kube-prometheus-stack"; then
+                                echo "Upgrading kube-prometheus-stack..."
+                                helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+                                    --namespace observability \
+                                    --values infra/helm/observability/values.yaml \
+                                    --wait --timeout 20m
+                            else
+                                echo "Installing kube-prometheus-stack..."
+                                helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+                                    --namespace observability \
+                                    --values infra/helm/observability/values.yaml \
+                                    --wait --timeout 20m
+                            fi
+                        """
+                        
+                        // Deploy/Upgrade Loki
+                        sh """
+                            if helm list -n observability | grep -q "loki-stack"; then
+                                echo "Upgrading loki-stack..."
+                                helm upgrade loki-stack grafana/loki-stack \
+                                    --namespace observability \
+                                    --values infra/helm/observability/values.yaml \
+                                    --wait --timeout 15m
+                            else
+                                echo "Installing loki-stack..."
+                                helm install loki-stack grafana/loki-stack \
+                                    --namespace observability \
+                                    --values infra/helm/observability/values.yaml \
+                                    --wait --timeout 15m
+                            fi
+                        """
+                        
+                        // Apply Loki datasource ConfigMap for Grafana
+                        sh "kubectl apply -f infra/kubernetes/loki-datasource.yaml"
+                        echo "Loki datasource configured in Grafana"
+                        
+                        // Apply ServiceMonitor for microservices metrics scraping
+                        sh "kubectl apply -f infra/kubernetes/servicemonitor.yaml"
+                        echo "ServiceMonitor configured for Prometheus"
+                        
+                        echo "Observability stack deployed successfully!"
+                        sh "kubectl get pods -n observability"
+                    }
+                }
+            }
+        }
 
         stage('Deploy to Kubernetes') {
             when {
@@ -257,7 +321,7 @@ pipeline {
             }
             steps {
                 script {
-                    def changedServices = getChangedServices()
+                    def changedServices = getAllServices()
                     
                     withCredentials([
                         file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG'),
@@ -399,7 +463,8 @@ pipeline {
                     }
                 }
             }
-        }        
+        }  
+      
     }
     
     post {
