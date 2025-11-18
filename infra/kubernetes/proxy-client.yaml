@@ -70,10 +70,15 @@ apiVersion: v1
 kind: Service
 metadata:
   name: proxy-client
+  labels:
+    app: proxy-client
+    prometheus: enabled
+    context-path: "custom"
 spec:
   type: ClusterIP
   selector:
     app: proxy-client
   ports:
-  - port: 8900
+  - name: http
+    port: 8900
     targetPort: 8900

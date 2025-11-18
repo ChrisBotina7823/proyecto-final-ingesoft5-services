@@ -70,8 +70,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: user-service
+  labels:
+    prometheus: enabled  # Enable Prometheus scraping
+    context-path: "true"  # Uses /user-service/actuator/prometheus
 spec:
   selector:
     app: user-service
   ports:
-  - port: 8700
+  - name: http  # Name required for ServiceMonitor
+    port: 8700
+    targetPort: 8700

@@ -44,8 +44,12 @@ apiVersion: v1
 kind: Service
 metadata:
   name: cloud-config
+  labels:
+    prometheus: enabled
+    context-path: "false"
 spec:
   selector:
     app: cloud-config
   ports:
-  - port: 9296
+  - name: http
+    port: 9296
