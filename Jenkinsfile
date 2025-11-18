@@ -1,15 +1,9 @@
 def isProduction() {
-    return env.BRANCH_NAME == 'main'
+    return true // env.BRANCH_NAME == 'main'
 }
 
-def getChangedServices() {
-    def changedFiles = sh(
-        script: 'git diff --name-only HEAD~1 HEAD',
-        returnStdout: true
-    ).trim().split('\n')
-    
-    def services = [] as Set
-    def allServices = [
+def getAllServices() {
+    return [
         "service-discovery",
         "cloud-config",
         "api-gateway",
@@ -21,6 +15,16 @@ def getChangedServices() {
         "shipping-service",
         "payment-service"
     ]
+}
+
+def getChangedServices() {
+    def changedFiles = sh(
+        script: 'git diff --name-only HEAD~1 HEAD',
+        returnStdout: true
+    ).trim().split('\n')
+    
+    def services = [] as Set
+    def allServices = getAllServices()
     
     changedFiles.each { file ->
         allServices.each { service ->
@@ -125,7 +129,7 @@ pipeline {
             }
             steps {
                 script {
-                    def changedServices = getChangedServices()
+                    def changedServices = getAllServices()
                     
                     if (changedServices.isEmpty()) {
                         echo "No service changes detected"
@@ -171,7 +175,7 @@ pipeline {
             }
             steps {
                 script {
-                    def changedServices = getChangedServices()
+                    def changedServices = getAllServices()
                     
                     if (changedServices.isEmpty()) {
                         echo "No service changes detected, skipping image scan"
@@ -257,7 +261,7 @@ pipeline {
             }
             steps {
                 script {
-                    def changedServices = getChangedServices()
+                    def changedServices = getAllServices()
                     
                     withCredentials([
                         file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG'),
