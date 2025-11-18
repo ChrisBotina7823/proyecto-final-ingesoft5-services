@@ -7,12 +7,25 @@
     group: ubuntu
     mode: '0755'
 
+- name: Set vm.max_map_count for Elasticsearch (SonarQube requirement)
+  sysctl:
+    name: vm.max_map_count
+    value: '262144'
+    state: present
+    reload: yes
+  become: yes
+
 - name: Copy Jenkins files
   synchronize:
     src: "{{ jenkins_source_path }}/"
     dest: "{{ jenkins_deploy_path }}/"
     delete: no
     recursive: yes
+
+- name: Fix line endings in shell scripts
+  shell: |
+    find {{ jenkins_deploy_path }} -name "*.sh" -type f -exec dos2unix {} \; || true
+  ignore_errors: yes
 
 - name: Set ownership
   file:
@@ -29,12 +42,36 @@
   become_user: ubuntu
   ignore_errors: yes
 
+- name: Clean Maven cache volume
+  shell: sg docker -c "docker volume rm jenkins_maven_repo || true"
+  become: yes
+  become_user: ubuntu
+
+- name: Clean NPM cache volume
+  shell: sg docker -c "docker volume rm jenkins_npm_cache || true"
+  become: yes
+  become_user: ubuntu
+
+- name: Clean Cypress cache volume
+  shell: sg docker -c "docker volume rm jenkins_cypress_cache || true"
+  become: yes
+  become_user: ubuntu
+
 - name: Build and start Jenkins
   shell: sg docker -c "docker compose up -d --build"
   args:
     chdir: "{{ jenkins_deploy_path }}"
   become: yes
   become_user: ubuntu
+
+- name: Wait for SonarQube
+  uri:
+    url: "http://localhost:9000"
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
 
 - name: Wait for Jenkins
   uri:

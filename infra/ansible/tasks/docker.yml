@@ -5,18 +5,19 @@
   failed_when: false
   changed_when: false
 
+- name: Install Dependencies
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - dos2unix
+    state: present
+    update_cache: yes
+
 - name: Install Docker
   block:
-    - name: Install dependencies
-      apt:
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - gnupg
-        state: present
-        update_cache: yes
-
     - name: Create keyring directory
       file:
         path: /etc/apt/keyrings
