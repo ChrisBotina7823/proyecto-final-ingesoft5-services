@@ -1,5 +1,5 @@
 def isProduction() {
-    return env.BRANCH_NAME == 'main'
+    return true // env.BRANCH_NAME == 'main'
 }
 
 def getChangedServices() {
