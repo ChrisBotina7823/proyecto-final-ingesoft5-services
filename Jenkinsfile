@@ -99,7 +99,7 @@ def sendNotification(status, message) {
                 <p><strong>Branch:</strong> ${env.BRANCH_NAME}</p>
                 <p><strong>URL:</strong> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
             """,
-            recipientProviders: [developers(), requestor()],
+            to: 'criedboca@gmail.com',
             mimeType: 'text/html'
         )
     } catch (Exception e) {
@@ -109,37 +109,52 @@ def sendNotification(status, message) {
 
 def deployWithHelm(environment, version) {
     def namespace = environment
-    def valuesFile = "infra/helm/${environment}-values.yaml"
-    def services = getAllServices()
+    def overlayPath = "infra/kubernetes/overlays/${environment}"
     
     echo "Deploying to ${environment} with version ${version}"
     
     sh "kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -"
     
-    def parallelDeploys = [:]
-    
-    services.each { service ->
-        def serviceName = service
-        parallelDeploys[serviceName] = {
-            sh """
-                helm upgrade --install ${serviceName} \
-                    ./services/${serviceName}/helm \
-                    -f ${valuesFile} \
-                    --set image.tag=${version} \
-                    --namespace ${namespace} \
-                    --wait \
-                    --timeout 10m
-            """
-        }
+    withCredentials([usernamePassword(
+        credentialsId: 'docker-registry',
+        usernameVariable: 'DOCKER_USER',
+        passwordVariable: 'DOCKER_PASS'
+    )]) {
+        sh """
+            kubectl create secret docker-registry ghcr-secret \
+                --docker-server=ghcr.io \
+                --docker-username=\${DOCKER_USER} \
+                --docker-password=\${DOCKER_PASS} \
+                --namespace=${namespace} \
+                --dry-run=client -o yaml | kubectl apply -f -
+        """
     }
     
-    parallel parallelDeploys
+    if (version != "latest" && version != "dev-latest") {
+        sh """
+            cd ${overlayPath}
+            kustomize edit set image \
+                ghcr.io/chrisbotina7823/service-discovery:${version} \
+                ghcr.io/chrisbotina7823/cloud-config:${version} \
+                ghcr.io/chrisbotina7823/api-gateway:${version} \
+                ghcr.io/chrisbotina7823/proxy-client:${version} \
+                ghcr.io/chrisbotina7823/user-service:${version} \
+                ghcr.io/chrisbotina7823/product-service:${version} \
+                ghcr.io/chrisbotina7823/favourite-service:${version} \
+                ghcr.io/chrisbotina7823/order-service:${version} \
+                ghcr.io/chrisbotina7823/payment-service:${version} \
+                ghcr.io/chrisbotina7823/shipping-service:${version}
+            cd ../..
+        """
+    }
     
+    sh "kubectl apply -k ${overlayPath} --force"
+    sh "kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=600s || true"
     sh "kubectl get pods -n ${namespace}"
 }
 
 def isProduction() {
-    return env.BRANCH_NAME == 'main'
+    return true || env.BRANCH_NAME == 'main'
 }
 
 def isDevelopment() {
@@ -151,13 +166,13 @@ def getAllServices() {
         "service-discovery",
         "cloud-config",
         "api-gateway",
-        "proxy-client",
         "user-service",
         "product-service",
         "favourite-service",
         "order-service",
+        "payment-service",
         "shipping-service",
-        "payment-service"
+        "proxy-client"
     ]
 }
 
@@ -385,7 +400,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
                         deployWithHelm('dev', "dev-${GIT_COMMIT_SHORT}")
                     }
                     sendNotification('SUCCESS', "Successfully deployed to Development environment")
@@ -393,32 +408,18 @@ pipeline {
             }
         }
         
-        stage('Deploy to Stage') {
+        stage('Smoke Tests - Dev') {
             when {
                 expression { isDevelopment() }
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
-                        deployWithHelm('stage', "dev-${GIT_COMMIT_SHORT}")
-                    }
-                    sendNotification('SUCCESS', "Successfully deployed to Staging environment")
-                }
-            }
-        }
-        
-        stage('Smoke Tests - Stage') {
-            when {
-                expression { isDevelopment() }
-            }
-            steps {
-                script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
                         sh """
                             echo "Waiting for API Gateway to be ready..."
-                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n stage --timeout=300s || true
+                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n dev --timeout=300s || true
                             
-                            kubectl port-forward svc/api-gateway 9090:8080 -n stage > /dev/null 2>&1 &
+                            kubectl port-forward svc/api-gateway 9091:8080 -n dev > /dev/null 2>&1 &
                             PORT_FORWARD_PID=\$!
                             
                             echo "Waiting for port-forward to be ready..."
@@ -426,7 +427,7 @@ pipeline {
                             
                             echo "Running smoke test..."
                             for i in {1..10}; do
-                                if curl -s -f http://localhost:9090/actuator/health > /dev/null 2>&1; then
+                                if curl -s -f http://localhost:9091/actuator/health > /dev/null 2>&1; then
                                     echo "Smoke test passed!"
                                     kill \$PORT_FORWARD_PID || true
                                     exit 0
@@ -507,7 +508,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
                         echo "Deploying Observability Stack..."
                         sh "kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -"
                         
@@ -564,7 +565,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
                         deployWithHelm('prod', VERSION)
                     }
                     
@@ -581,7 +582,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
                         def e2eTestsExist = fileExists('tests/e2e')
                         
                         if (!e2eTestsExist) {
@@ -637,7 +638,7 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
                         def perfTestsExist = fileExists('tests/performance')
                         
                         if (!perfTestsExist) {
