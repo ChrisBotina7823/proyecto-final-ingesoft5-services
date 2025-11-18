@@ -1,0 +1,121 @@
+global:
+  namespace: stage
+  environment: staging
+  imageTag: latest
+
+namespace:
+  name: stage
+  labels:
+    environment: staging
+    project: ecommerce-microservices
+
+services:
+  serviceDiscovery:
+    replicas: 1
+    resources:
+      requests:
+        memory: "196Mi"
+        cpu: "75m"
+      limits:
+        memory: "384Mi"
+        cpu: "375m"
+
+  cloudConfig:
+    replicas: 1
+    resources:
+      requests:
+        memory: "196Mi"
+        cpu: "75m"
+      limits:
+        memory: "384Mi"
+        cpu: "375m"
+
+  apiGateway:
+    replicas: 2
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  proxyClient:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  userService:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  productService:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  favouriteService:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  orderService:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  shippingService:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  paymentService:
+    replicas: 1
+    resources:
+      requests:
+        memory: "384Mi"
+        cpu: "150m"
+      limits:
+        memory: "768Mi"
+        cpu: "750m"
+
+  zipkin:
+    replicas: 1
+    resources:
+      requests:
+        memory: "196Mi"
+        cpu: "75m"
+      limits:
+        memory: "384Mi"
+        cpu: "375m"

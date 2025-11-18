@@ -64,6 +64,19 @@ credentials:
               username: "admin"
               password: "${SONAR_ADMIN_PASSWORD}"
               description: "SonarQube Admin Credentials"
+              
+          - string:
+              scope: GLOBAL
+              id: "slack-token"
+              secret: "${SLACK_TOKEN}"
+              description: "Slack Bot Token"
+              
+          - usernamePassword:
+              scope: GLOBAL
+              id: "smtp-credentials"
+              username: "${SMTP_USER}"
+              password: "${SMTP_PASSWORD}"
+              description: "SMTP Email Credentials"
 
 unclassified:
   location:
@@ -86,6 +99,35 @@ unclassified:
         
   gitHubConfiguration:
     apiRateLimitChecker: ThrottleOnOver
+    
+  slackNotifier:
+    teamDomain: "${SLACK_WORKSPACE}"
+    tokenCredentialId: "slack-token"
+    room: "#deployments"
+    sendAsText: false
+    
+  mailer:
+    smtpHost: "${SMTP_HOST:-smtp.gmail.com}"
+    smtpPort: "${SMTP_PORT:-587}"
+    useSsl: true
+    charset: "UTF-8"
+    authentication:
+      username: "${SMTP_USER}"
+      password: "${SMTP_PASSWORD}"
+    
+  extendedEmailPublisher:
+    defaultContentType: "text/html"
+    defaultSubject: "$PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS"
+    defaultBody: |
+      <h2>Build $BUILD_STATUS</h2>
+      <p><strong>Project:</strong> $PROJECT_NAME</p>
+      <p><strong>Build Number:</strong> $BUILD_NUMBER</p>
+      <p><strong>Build URL:</strong> <a href="$BUILD_URL">$BUILD_URL</a></p>
+    smtpHost: "${SMTP_HOST:-smtp.gmail.com}"
+    smtpPort: "${SMTP_PORT:-587}"
+    useSsl: true
+    smtpAuthUsername: "${SMTP_USER}"
+    smtpAuthPassword: "${SMTP_PASSWORD}"
 
 jobs:
   - script: >

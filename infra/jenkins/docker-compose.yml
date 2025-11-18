@@ -57,6 +57,12 @@ services:
       - SONAR_ADMIN_PASSWORD=${SONAR_ADMIN_PASSWORD:-admin}
       - JENKINS_URL=${JENKINS_URL:-http://localhost:8090}
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://host.docker.internal:8080}
+      - SLACK_TOKEN=${SLACK_TOKEN}
+      - SLACK_WORKSPACE=${SLACK_WORKSPACE}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

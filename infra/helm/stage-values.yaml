@@ -1,0 +1,31 @@
+# Staging Environment Values
+
+image:
+  tag: "stage-latest"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+resources:
+  requests:
+    memory: "384Mi"
+    cpu: "150m"
+  limits:
+    memory: "768Mi"
+    cpu: "750m"
+
+livenessProbe:
+  initialDelaySeconds: 240
+  periodSeconds: 30
+  timeoutSeconds: 10
+
+readinessProbe:
+  initialDelaySeconds: 240
+  periodSeconds: 30
+  timeoutSeconds: 10
+
+env:
+  - name: SPRING_PROFILES_ACTIVE
+    value: "stage"
+  - name: JAVA_OPTS
+    value: "-Xms256m -Xmx512m"
