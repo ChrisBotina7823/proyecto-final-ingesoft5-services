@@ -18,7 +18,7 @@ resilience4j:
   # Order: Retry (outer) → CircuitBreaker (middle) → Bulkhead (inner) → Call
   retry:
     instances:
-      orderService:
+      orderServiceRetry:
         max-attempts: 3
         wait-duration: 500ms
         enable-exponential-backoff: true
@@ -31,23 +31,32 @@ resilience4j:
         ignore-exceptions:
           - io.github.resilience4j.bulkhead.BulkheadFullException
           - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+          - org.springframework.web.client.HttpClientErrorException
   circuitbreaker:
     instances:
-      orderService:
+      orderServiceCircuitBreaker:
         register-health-indicator: true
         event-consumer-buffer-size: 10
         automatic-transition-from-open-to-half-open-enabled: true
-        failure-rate-threshold: 50
-        minimum-number-of-calls: 5
-        permitted-number-of-calls-in-half-open-state: 3
-        sliding-window-size: 10
-        wait-duration-in-open-state: 10s
+        failure-rate-threshold: 80
+        minimum-number-of-calls: 10
+        permitted-number-of-calls-in-half-open-state: 5
+        sliding-window-size: 20
+        wait-duration-in-open-state: 15s
         sliding-window-type: COUNT_BASED
-  bulkhead:
+        record-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+          - java.net.SocketTimeoutException
+        ignore-exceptions:
+          - org.springframework.web.client.HttpClientErrorException.NotFound
+  thread-pool-bulkhead:
     instances:
-      orderService:
-        max-concurrent-calls: 10
-        max-wait-duration: 0ms
+      orderServiceBulkhead:
+        max-thread-pool-size: 10
+        core-thread-pool-size: 5
+        queue-capacity: 20
+        keep-alive-duration: 20ms
 
 management:
   endpoints:

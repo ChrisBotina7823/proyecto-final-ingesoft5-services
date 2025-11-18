@@ -29,12 +29,29 @@ public class UserServiceClient {
      * Fetches user from USER-SERVICE with resilience patterns applied
      */
     @Retry(name = "orderServiceRetry")
-    @CircuitBreaker(name = "orderServiceCircuitBreaker")
+    @CircuitBreaker(name = "orderServiceCircuitBreaker", fallbackMethod = "getUserByIdFallback")
     @Bulkhead(name = "orderServiceBulkhead", type = Bulkhead.Type.THREADPOOL)
     public UserDto getUserById(final Integer userId) {
         log.debug("Fetching user id={} from USER-SERVICE (via UserServiceClient)", userId);
         return this.restTemplate.getForObject(
                 AppConstant.DiscoveredDomainsApi.USER_SERVICE_API_URL + "/" + userId,
                 UserDto.class);
+    }
+
+    /**
+     * Fallback method when USER-SERVICE is unavailable or circuit is open
+     * Returns a default UserDto with minimal information
+     */
+    private UserDto getUserByIdFallback(final Integer userId, Exception e) {
+        log.warn("Fallback triggered for getUserById(userId={}). Reason: {}", userId, e.getMessage());
+        
+        // Return a default UserDto with minimal info
+        UserDto fallbackUser = new UserDto();
+        fallbackUser.setUserId(userId);
+        fallbackUser.setFirstName("Unknown");
+        fallbackUser.setLastName("User");
+        fallbackUser.setEmail("unavailable@service.down");
+        
+        return fallbackUser;
     }
 }
