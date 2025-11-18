@@ -43,6 +43,10 @@ public class OrderDto implements Serializable {
 	@JsonInclude(Include.NON_NULL)
 	private CartDto cartDto;
 	
+	// Feature Toggle: Priority field
+	@JsonInclude(Include.NON_NULL)
+	private String priority;
+	
 }
 
 

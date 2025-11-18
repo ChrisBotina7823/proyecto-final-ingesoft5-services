@@ -7,6 +7,7 @@ import javax.transaction.Transactional;
 
 import org.springframework.stereotype.Service;
 
+import com.selimhorri.app.config.OrderFeatureConfig;
 import com.selimhorri.app.dto.OrderDto;
 import com.selimhorri.app.exception.wrapper.OrderNotFoundException;
 import com.selimhorri.app.helper.OrderMappingHelper;
@@ -29,7 +30,11 @@ public class OrderServiceImpl implements OrderService {
 		log.info("*** OrderDto List, service; fetch all orders *");
 		return this.orderRepository.findAll()
 				.stream()
-					.map(OrderMappingHelper::map)
+					.map(order -> {
+						OrderDto dto = OrderMappingHelper.map(order);
+						applyFeatureToggles(dto);
+						return dto;
+					})
 					.distinct()
 					.collect(Collectors.toUnmodifiableList());
 	}
@@ -37,10 +42,12 @@ public class OrderServiceImpl implements OrderService {
 	@Override
 	public OrderDto findById(final Integer orderId) {
 		log.info("*** OrderDto, service; fetch order by id *");
-		return this.orderRepository.findById(orderId)
+		OrderDto dto = this.orderRepository.findById(orderId)
 				.map(OrderMappingHelper::map)
 				.orElseThrow(() -> new OrderNotFoundException(String
 						.format("Order with id: %d not found", orderId)));
+		applyFeatureToggles(dto);
+		return dto;
 	}
 	
 	@Override
@@ -70,7 +77,28 @@ public class OrderServiceImpl implements OrderService {
 		this.orderRepository.delete(OrderMappingHelper.map(this.findById(orderId)));
 	}
 	
+	/**
+	 * Apply feature toggles to OrderDto using Togglz
+	 * Feature: PRIORITY_FIELD - Adds priority field to orders
+	 */
+	private void applyFeatureToggles(OrderDto orderDto) {
+		if (OrderFeatureConfig.PRIORITY_FIELD.isActive()) {
+			// Calculate priority based on order fee
+			String priority = calculatePriority(orderDto.getOrderFee());
+			orderDto.setPriority(priority);
+			log.debug("Togglz Feature: Priority field enabled - Order {} has priority: {}", 
+					orderDto.getOrderId(), priority);
+		} else {
+			log.debug("Togglz Feature: Priority field disabled");
+		}
+	}
 	
+	private String calculatePriority(Double orderFee) {
+		if (orderFee == null) return "STANDARD";
+		if (orderFee > 1000) return "HIGH";
+		if (orderFee > 500) return "MEDIUM";
+		return "STANDARD";
+	}
 	
 }
 

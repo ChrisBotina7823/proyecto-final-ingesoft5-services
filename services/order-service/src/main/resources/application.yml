@@ -53,13 +53,24 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,env,togglz
   health:
     circuitbreakers:
       enabled: true
   endpoint:
     health:
       show-details: always
+
+# Togglz Feature Toggles Configuration
+togglz:
+  enabled: true
+  console:
+    enabled: true
+    secured: false
+    path: /togglz-console
+  features:
+    PRIORITY_FIELD:
+      enabled: ${ORDER_PRIORITY_FEATURE:false}
 
 
 
