@@ -1,13 +1,22 @@
 def calculateSemanticVersion() {
     def lastTag = sh(
-        script: "git describe --tags --abbrev=0 2>/dev/null || echo '0.0.0'",
+        script: "git describe --tags --abbrev=0 2>/dev/null || echo ''",
         returnStdout: true
     ).trim()
     
-    def commits = sh(
-        script: "git log ${lastTag}..HEAD --pretty=%B",
-        returnStdout: true
-    ).trim()
+    def commits = ""
+    if (lastTag) {
+        commits = sh(
+            script: "git log ${lastTag}..HEAD --pretty=%B 2>/dev/null || echo ''",
+            returnStdout: true
+        ).trim()
+    } else {
+        commits = sh(
+            script: "git log --pretty=%B",
+            returnStdout: true
+        ).trim()
+        lastTag = "0.0.0"
+    }
     
     def (major, minor, patch) = lastTag.replaceAll('v', '').tokenize('.').collect { it.toInteger() }
     

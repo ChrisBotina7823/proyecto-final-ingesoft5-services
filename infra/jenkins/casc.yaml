@@ -53,10 +53,17 @@ credentials:
             
           - file:
               scope: GLOBAL
-              id: "kubeconfig"
-              fileName: "kubeconfig"
-              secretBytes: ${file:/var/jenkins_home/kubeconfig.base64}
-              description: "Kubernetes Cluster Config"
+              id: "kubeconfig-dev"
+              fileName: "kubeconfig-dev"
+              secretBytes: ${file:/var/jenkins_home/kubeconfig-dev}
+              description: "Kubernetes Dev Cluster Config"
+              
+          - file:
+              scope: GLOBAL
+              id: "kubeconfig-prod"
+              fileName: "kubeconfig-prod"
+              secretBytes: ${file:/var/jenkins_home/kubeconfig-prod}
+              description: "Kubernetes Prod Cluster Config"
               
           - usernamePassword:
               scope: GLOBAL
@@ -103,31 +110,22 @@ unclassified:
   slackNotifier:
     teamDomain: "${SLACK_WORKSPACE}"
     tokenCredentialId: "slack-token"
+    botUser: true
+    baseUrl: "https://slack.com/api"
     room: "#deployments"
     sendAsText: false
     
   mailer:
     smtpHost: "${SMTP_HOST:-smtp.gmail.com}"
-    smtpPort: "${SMTP_PORT:-587}"
-    useSsl: true
+    smtpPort: "587"
+    useSsl: false
+    useTls: true
     charset: "UTF-8"
+    defaultSuffix: "@gmail.com"
+    replyToAddress: "noreply@ci.local"
     authentication:
       username: "${SMTP_USER}"
       password: "${SMTP_PASSWORD}"
-    
-  extendedEmailPublisher:
-    defaultContentType: "text/html"
-    defaultSubject: "$PROJECT_NAME - Build # $BUILD_NUMBER - $BUILD_STATUS"
-    defaultBody: |
-      <h2>Build $BUILD_STATUS</h2>
-      <p><strong>Project:</strong> $PROJECT_NAME</p>
-      <p><strong>Build Number:</strong> $BUILD_NUMBER</p>
-      <p><strong>Build URL:</strong> <a href="$BUILD_URL">$BUILD_URL</a></p>
-    smtpHost: "${SMTP_HOST:-smtp.gmail.com}"
-    smtpPort: "${SMTP_PORT:-587}"
-    useSsl: true
-    smtpAuthUsername: "${SMTP_USER}"
-    smtpAuthPassword: "${SMTP_PASSWORD}"
 
 jobs:
   - script: >
