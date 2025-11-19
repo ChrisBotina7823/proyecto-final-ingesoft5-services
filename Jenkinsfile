@@ -650,10 +650,6 @@ EOF
                         dir("/tmp/e2e-tests-${BUILD_NUMBER}") {
                             sh """
                                 export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
-                                echo "Waiting for API Gateway to be ready..."
-                                kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s
-                                
-                                export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
                                 PORT_FORWARD_PID=\$!
                                 
@@ -721,10 +717,6 @@ EOF
                         
                         dir('tests/performance') {
                             sh """
-                                export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
-                                echo "Waiting for API Gateway..."
-                                kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s
-                                
                                 export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
                                 PORT_FORWARD_PID=\$!
