@@ -527,11 +527,6 @@ pipeline {
                             submitter: 'admin',
                             submitterParameter: 'APPROVER',
                             parameters: [
-                                choice(
-                                    name: 'DEPLOYMENT_STRATEGY',
-                                    choices: ['rolling', 'blue-green'],
-                                    description: 'Deployment strategy to use'
-                                ),
                                 text(
                                     name: 'APPROVAL_NOTES',
                                     defaultValue: '',
@@ -542,16 +537,13 @@ pipeline {
                         
                         if (approvalData instanceof Map) {
                             env.APPROVER = approvalData.APPROVER
-                            env.DEPLOYMENT_STRATEGY = approvalData.DEPLOYMENT_STRATEGY
                             env.APPROVAL_NOTES = approvalData.APPROVAL_NOTES
                         } else {
                             env.APPROVER = approvalData
-                            env.DEPLOYMENT_STRATEGY = 'rolling'
                             env.APPROVAL_NOTES = ''
                         }
                         
                         echo "Deployment approved by: ${env.APPROVER}"
-                        echo "Strategy: ${env.DEPLOYMENT_STRATEGY}"
                         
                         sendNotification('SUCCESS', "Production deployment approved by ${env.APPROVER}")
                     }
@@ -593,11 +585,14 @@ pipeline {
             steps {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG_FILE')]) {
+                        sh "cp \${KUBECONFIG_FILE} /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                         env.KUBECONFIG = "/tmp/kubeconfig-prod-${BUILD_NUMBER}"
+                        
                         def e2eTestsExist = fileExists('tests/e2e')
                         
                         if (!e2eTestsExist) {
                             echo "E2E tests directory not found, skipping..."
+                            sh "rm -f /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                             return
                         }
                         
@@ -608,10 +603,11 @@ pipeline {
                         
                         dir("/tmp/e2e-tests-${BUILD_NUMBER}") {
                             sh """
-                                export KUBECONFIG=${env.KUBECONFIG}
+                                export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 echo "Waiting for API Gateway to be ready..."
                                 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s || true
                                 
+                                export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
                                 PORT_FORWARD_PID=\$!
                                 
@@ -639,6 +635,8 @@ pipeline {
                                 rm -rf e2e-tests-${BUILD_NUMBER}
                             """
                         }
+                        
+                        sh "rm -f /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                     }
                 }
             }
@@ -651,20 +649,24 @@ pipeline {
             steps {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG_FILE')]) {
+                        sh "cp \${KUBECONFIG_FILE} /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                         env.KUBECONFIG = "/tmp/kubeconfig-prod-${BUILD_NUMBER}"
+                        
                         def perfTestsExist = fileExists('tests/performance')
                         
                         if (!perfTestsExist) {
                             echo "Performance tests directory not found, skipping..."
+                            sh "rm -f /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                             return
                         }
                         
                         dir('tests/performance') {
                             sh """
-                                export KUBECONFIG=${env.KUBECONFIG}
+                                export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 echo "Waiting for API Gateway..."
                                 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s || true
                                 
+                                export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
                                 PORT_FORWARD_PID=\$!
                                 
@@ -706,6 +708,8 @@ pipeline {
                                 kill \$PORT_FORWARD_PID || true
                             """
                         }
+                        
+                        sh "rm -f /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                     }
                 }
             }
