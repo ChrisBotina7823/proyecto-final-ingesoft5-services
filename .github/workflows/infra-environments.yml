@@ -298,19 +298,19 @@ jobs:
           # Update dev kubeconfig if available
           if [ "${{ needs.terraform-dev.result }}" == "success" ]; then
             echo "${{ needs.terraform-dev.outputs.kubeconfig }}" | base64 -d > kubeconfig-dev
-            scp -i ~/.ssh/vm_key kubeconfig-dev ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            scp -i ~/.ssh/vm_key kubeconfig-dev ubuntu@$JENKINS_IP:/opt/jenkins/
             echo "Dev kubeconfig updated on Jenkins VM"
           fi
           
           # Update prod kubeconfig if available
           if [ "${{ needs.terraform-prod.result }}" == "success" ]; then
             echo "${{ needs.terraform-prod.outputs.kubeconfig }}" | base64 -d > kubeconfig-prod
-            scp -i ~/.ssh/vm_key kubeconfig-prod ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            scp -i ~/.ssh/vm_key kubeconfig-prod ubuntu@$JENKINS_IP:/opt/jenkins/
             echo "Prod kubeconfig updated on Jenkins VM"
           fi
           
           # Restart Jenkins to reload credentials
-          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /opt/jenkins && sg docker -c 'docker compose restart jenkins'"
           
           echo "Jenkins restarted with new kubeconfig files"
       
