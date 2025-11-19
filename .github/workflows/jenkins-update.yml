@@ -163,10 +163,10 @@ jobs:
           JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
           
           # Copy all Jenkins configuration files
-          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/plugins.txt ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/Dockerfile ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/docker-compose.yml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/plugins.txt ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/Dockerfile ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/docker-compose.yml ubuntu@$JENKINS_IP:/opt/jenkins/
           scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/opt/jenkins/
           scp -i ~/.ssh/vm_key -r infra/jenkins/init-sonar.sh ubuntu@$JENKINS_IP:/opt/jenkins/
           
