@@ -45,8 +45,18 @@ def createGitTag(version) {
         sh """
             git config user.name "Jenkins CI"
             git config user.email "jenkins@ci.local"
+            
+            # Check if tag already exists locally
+            if git rev-parse v${version} >/dev/null 2>&1; then
+                echo "Tag v${version} already exists locally, deleting..."
+                git tag -d v${version}
+            fi
+            
+            # Create new tag
             git tag -a v${version} -m 'Release v${version}'
-            git push https://\${GIT_TOKEN}@github.com/ChrisBotina7823/proyecto-final-ingesoft5-services.git v${version}
+            
+            # Push with force to overwrite remote tag if it exists
+            git push https://\${GIT_TOKEN}@github.com/ChrisBotina7823/proyecto-final-ingesoft5-services.git v${version} --force
         """
     }
 }
@@ -174,7 +184,7 @@ def deployServices(environment, version) {
     """
     sh """
         export KUBECONFIG=${env.KUBECONFIG}
-        kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=600s || true
+        kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=1200s
     """
     sh """
         export KUBECONFIG=${env.KUBECONFIG}
@@ -449,7 +459,7 @@ pipeline {
                         sh """
                             export KUBECONFIG=${env.KUBECONFIG}
                             echo "Waiting for API Gateway to be ready..."
-                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n dev --timeout=300s || true
+                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n dev --timeout=300s
                             
                             export KUBECONFIG=${env.KUBECONFIG}
                             kubectl port-forward svc/api-gateway 9091:8080 -n dev > /dev/null 2>&1 &
@@ -574,14 +584,14 @@ pipeline {
                         
                         sh """
                             mkdir -p /tmp/e2e-tests-${BUILD_NUMBER}
-                            cp -r tests/e2e/* /tmp/e2e-tests-${BUILD_NUMBER}/ || true
+                            cp -r tests/e2e/* /tmp/e2e-tests-${BUILD_NUMBER}/
                         """
                         
                         dir("/tmp/e2e-tests-${BUILD_NUMBER}") {
                             sh """
                                 export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 echo "Waiting for API Gateway to be ready..."
-                                kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s || true
+                                kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s
                                 
                                 export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
@@ -640,7 +650,7 @@ pipeline {
                             sh """
                                 export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 echo "Waiting for API Gateway..."
-                                kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s || true
+                                kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s
                                 
                                 export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
