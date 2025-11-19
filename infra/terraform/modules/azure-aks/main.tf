@@ -71,14 +71,15 @@ resource "azurerm_kubernetes_cluster" "main" {
   dns_prefix          = "aks-${var.environment}"
 
   default_node_pool {
-    name                = "default"
-    node_count          = var.enable_autoscaling ? null : var.node_count
-    vm_size             = var.node_vm_size
-    vnet_subnet_id      = azurerm_subnet.aks.id
-    enable_auto_scaling = var.enable_autoscaling
-    min_count           = var.enable_autoscaling ? var.min_node_count : null
-    max_count           = var.enable_autoscaling ? var.max_node_count : null
-    os_disk_size_gb     = 64
+    name                        = "default"
+    temporary_name_for_rotation = "defaulttmp"
+    node_count                  = var.enable_autoscaling ? null : var.node_count
+    vm_size                     = var.node_vm_size
+    vnet_subnet_id              = azurerm_subnet.aks.id
+    enable_auto_scaling         = var.enable_autoscaling
+    min_count                   = var.enable_autoscaling ? var.min_node_count : null
+    max_count                   = var.enable_autoscaling ? var.max_node_count : null
+    os_disk_size_gb             = 64
   }
 
   # Managed identity

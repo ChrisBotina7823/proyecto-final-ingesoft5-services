@@ -53,10 +53,17 @@ credentials:
             
           - file:
               scope: GLOBAL
-              id: "kubeconfig"
+              id: "kubeconfig-dev"
               fileName: "kubeconfig"
-              secretBytes: ${file:/var/jenkins_home/kubeconfig.base64}
-              description: "Kubernetes Cluster Config"
+              secretBytes: "${readFile:/var/jenkins_home/kubeconfig-dev.base64}"
+              description: "Kubernetes Dev Cluster Config"
+              
+          - file:
+              scope: GLOBAL
+              id: "kubeconfig-prod"
+              fileName: "kubeconfig"
+              secretBytes: "${readFile:/var/jenkins_home/kubeconfig-prod.base64}"
+              description: "Kubernetes Prod Cluster Config"
               
           - usernamePassword:
               scope: GLOBAL
@@ -64,6 +71,19 @@ credentials:
               username: "admin"
               password: "${SONAR_ADMIN_PASSWORD}"
               description: "SonarQube Admin Credentials"
+              
+          - string:
+              scope: GLOBAL
+              id: "slack-token"
+              secret: "${SLACK_TOKEN}"
+              description: "Slack Bot Token"
+              
+          - usernamePassword:
+              scope: GLOBAL
+              id: "smtp-credentials"
+              username: "${SMTP_USER}"
+              password: "${SMTP_PASSWORD}"
+              description: "SMTP Email Credentials"
 
 unclassified:
   location:
@@ -86,6 +106,26 @@ unclassified:
         
   gitHubConfiguration:
     apiRateLimitChecker: ThrottleOnOver
+    
+  slackNotifier:
+    teamDomain: "${SLACK_WORKSPACE}"
+    tokenCredentialId: "slack-token"
+    botUser: true
+    baseUrl: "https://slack.com/api"
+    room: "#deployments"
+    sendAsText: false
+    
+  mailer:
+    smtpHost: "${SMTP_HOST:-smtp.gmail.com}"
+    smtpPort: "587"
+    useSsl: false
+    useTls: true
+    charset: "UTF-8"
+    defaultSuffix: "@gmail.com"
+    replyToAddress: "noreply@ci.local"
+    authentication:
+      username: "${SMTP_USER}"
+      password: "${SMTP_PASSWORD}"
 
 jobs:
   - script: >

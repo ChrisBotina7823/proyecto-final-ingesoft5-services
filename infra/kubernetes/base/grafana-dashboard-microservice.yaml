@@ -1,0 +1,326 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-microservice-template
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  microservice-template.json: |-
+    {
+      "annotations": {
+        "list": []
+      },
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "axisLabel": "requests/sec",
+                "axisPlacement": "auto",
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never"
+              },
+              "unit": "reqps"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "id": 1,
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{application=\"$service\", uri!~\"/actuator.*\"}[5m])) by (uri, method, status)",
+              "legendFormat": "{{method}} {{uri}} [{{status}}]"
+            }
+          ],
+          "title": "Request Rate by Endpoint",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "axisLabel": "seconds",
+                "axisPlacement": "auto",
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "id": 2,
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$service\", uri!~\"/actuator.*\"}[5m])) by (le, uri))",
+              "legendFormat": "{{uri}} p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$service\", uri!~\"/actuator.*\"}[5m])) by (le, uri))",
+              "legendFormat": "{{uri}} p99"
+            }
+          ],
+          "title": "Response Time p95/p99",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 1},
+                  {"color": "red", "value": 5}
+                ]
+              },
+              "unit": "percent"
+            }
+          },
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8},
+          "id": 3,
+          "targets": [
+            {
+              "expr": "(sum(rate(http_server_requests_seconds_count{application=\"$service\", status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{application=\"$service\"}[5m]))) * 100"
+            }
+          ],
+          "title": "Error Rate (%)",
+          "type": "gauge"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "red", "value": null},
+                  {"color": "green", "value": 1}
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8},
+          "id": 4,
+          "targets": [
+            {
+              "expr": "up{job=\"$service\"}"
+            }
+          ],
+          "title": "Service Status",
+          "type": "gauge"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "axisLabel": "bytes",
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1
+              },
+              "unit": "bytes"
+            }
+          },
+          "gridPos": {"h": 6, "w": 12, "x": 12, "y": 8},
+          "id": 5,
+          "targets": [
+            {
+              "expr": "jvm_memory_used_bytes{application=\"$service\"}",
+              "legendFormat": "{{area}} - {{id}}"
+            }
+          ],
+          "title": "JVM Memory Usage",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1
+              },
+              "unit": "percentunit"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+          "id": 6,
+          "targets": [
+            {
+              "expr": "rate(jvm_gc_pause_seconds_sum{application=\"$service\"}[5m]) / rate(jvm_gc_pause_seconds_count{application=\"$service\"}[5m])",
+              "legendFormat": "{{action}} - {{cause}}"
+            }
+          ],
+          "title": "GC Pause Time",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+          "id": 7,
+          "targets": [
+            {
+              "expr": "jvm_threads_live_threads{application=\"$service\"}",
+              "legendFormat": "Live Threads"
+            },
+            {
+              "expr": "jvm_threads_daemon_threads{application=\"$service\"}",
+              "legendFormat": "Daemon Threads"
+            }
+          ],
+          "title": "JVM Threads",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+          "id": 8,
+          "targets": [
+            {
+              "expr": "hikaricp_connections_active{pool=~\".*$service.*\"}",
+              "legendFormat": "Active - {{pool}}"
+            },
+            {
+              "expr": "hikaricp_connections_idle{pool=~\".*$service.*\"}",
+              "legendFormat": "Idle - {{pool}}"
+            },
+            {
+              "expr": "hikaricp_connections_max{pool=~\".*$service.*\"}",
+              "legendFormat": "Max - {{pool}}"
+            }
+          ],
+          "title": "Database Connection Pool",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "thresholds"},
+              "thresholds": {
+                "steps": [
+                  {"color": "green", "value": null},
+                  {"color": "yellow", "value": 0.5},
+                  {"color": "red", "value": 1}
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+          "id": 9,
+          "targets": [
+            {
+              "expr": "resilience4j_circuitbreaker_state{application=\"$service\", state=\"open\"}",
+              "legendFormat": "{{name}} - Open"
+            },
+            {
+              "expr": "resilience4j_circuitbreaker_state{application=\"$service\", state=\"half_open\"}",
+              "legendFormat": "{{name}} - Half Open"
+            }
+          ],
+          "title": "Circuit Breaker State",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": {"mode": "palette-classic"},
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 30},
+          "id": 10,
+          "targets": [
+            {
+              "expr": "rate(logback_events_total{application=\"$service\"}[5m])",
+              "legendFormat": "{{level}}"
+            }
+          ],
+          "title": "Log Events Rate by Level",
+          "type": "timeseries"
+        }
+      ],
+      "schemaVersion": 27,
+      "style": "dark",
+      "tags": ["microservice", "template"],
+      "templating": {
+        "list": [
+          {
+            "current": {},
+            "datasource": "Prometheus",
+            "definition": "label_values(up{job=~\".*-service|api-gateway\"}, application)",
+            "hide": 0,
+            "includeAll": false,
+            "label": "Service",
+            "multi": false,
+            "name": "service",
+            "options": [],
+            "query": {
+              "query": "label_values(up{job=~\".*-service|api-gateway\"}, application)",
+              "refId": "StandardVariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-1h",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Microservice Performance Dashboard",
+      "uid": "microservice-template",
+      "version": 1
+    }

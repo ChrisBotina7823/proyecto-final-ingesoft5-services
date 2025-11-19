@@ -13,6 +13,9 @@ import com.selimhorri.app.helper.ProductMappingHelper;
 import com.selimhorri.app.repository.ProductRepository;
 import com.selimhorri.app.service.ProductService;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ProductServiceImpl implements ProductService {
 	
 	private final ProductRepository productRepository;
+	private final MeterRegistry meterRegistry;
 	
 	@Override
 	public List<ProductDto> findAll() {
@@ -37,6 +41,15 @@ public class ProductServiceImpl implements ProductService {
 	@Override
 	public ProductDto findById(final Integer productId) {
 		log.info("*** ProductDto, service; fetch product by id *");
+		
+		// Business metric: Track product views
+		Counter.builder("product_views_total")
+				.description("Total number of product views")
+				.tag("application", "product-service")
+				.tag("product_id", String.valueOf(productId))
+				.register(meterRegistry)
+				.increment();
+		
 		return this.productRepository.findById(productId)
 				.map(ProductMappingHelper::map)
 				.orElseThrow(() -> new ProductNotFoundException(String.format("Product with id: %d not found", productId)));
@@ -52,6 +65,17 @@ public class ProductServiceImpl implements ProductService {
 	@Override
 	public ProductDto update(final ProductDto productDto) {
 		log.info("*** ProductDto, service; update product *");
+		
+		// Business metric: Track stock levels with gauge (for low stock alerts)
+		if (productDto.getQuantity() != null) {
+			Gauge.builder("product_stock_gauge", productDto, p -> p.getQuantity() != null ? p.getQuantity() : 0)
+					.description("Current stock level for product")
+					.tag("application", "product-service")
+					.tag("product_id", String.valueOf(productDto.getProductId()))
+					.tag("product_title", productDto.getProductTitle() != null ? productDto.getProductTitle() : "unknown")
+					.register(meterRegistry);
+		}
+		
 		return ProductMappingHelper.map(this.productRepository
 				.save(ProductMappingHelper.map(productDto)));
 	}

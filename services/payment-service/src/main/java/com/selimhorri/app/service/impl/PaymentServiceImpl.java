@@ -16,6 +16,9 @@ import com.selimhorri.app.helper.PaymentMappingHelper;
 import com.selimhorri.app.repository.PaymentRepository;
 import com.selimhorri.app.service.PaymentService;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +30,7 @@ public class PaymentServiceImpl implements PaymentService {
 	
 	private final PaymentRepository paymentRepository;
 	private final RestTemplate restTemplate;
+	private final MeterRegistry meterRegistry;
 	
 	@Override
 	public List<PaymentDto> findAll() {
@@ -59,6 +63,27 @@ public class PaymentServiceImpl implements PaymentService {
 	@Override
 	public PaymentDto save(final PaymentDto paymentDto) {
 		log.info("*** PaymentDto, service; save payment *");
+		
+		// Business metric: Track payments by status
+		if (paymentDto.getPaymentStatus() != null) {
+			Counter.builder("payments_processed_total")
+					.description("Total number of payments processed")
+					.tag("application", "payment-service")
+					.tag("status", paymentDto.getPaymentStatus().name())
+					.register(meterRegistry)
+					.increment();
+		}
+		
+		// Business metric: Track payment volume
+		if (paymentDto.getOrderDto() != null && paymentDto.getOrderDto().getOrderFee() != null) {
+			DistributionSummary.builder("payment_volume_dollars")
+					.description("Distribution of payment volumes in dollars")
+					.tag("application", "payment-service")
+					.tag("status", paymentDto.getPaymentStatus() != null ? paymentDto.getPaymentStatus().name() : "UNKNOWN")
+					.register(meterRegistry)
+					.record(paymentDto.getOrderDto().getOrderFee());
+		}
+		
 		return PaymentMappingHelper.map(this.paymentRepository
 				.save(PaymentMappingHelper.map(paymentDto)));
 	}

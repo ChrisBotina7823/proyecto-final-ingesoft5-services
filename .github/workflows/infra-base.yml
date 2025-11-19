@@ -1,0 +1,247 @@
+name: Infrastructure - Base (Jenkins VM)
+
+on:
+  push:
+    branches:
+      - main
+      - 'infra/**'
+    paths:
+      - 'infra/terraform/environments/base-infra/**'
+      - 'infra/ansible/**'
+      - 'infra/jenkins/**'
+      - '.github/workflows/infra-base.yml'
+  workflow_dispatch:
+    inputs:
+      force_ansible_deploy:
+        description: 'Force full Ansible deployment (reinstall)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  TF_VERSION: '1.9.0'
+  ANSIBLE_VERSION: '2.15.0'
+
+jobs:
+  terraform-base-infra:
+    name: Deploy Base Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      jenkins_vm_ip: ${{ steps.terraform_output.outputs.jenkins_vm_ip }}
+      jenkins_exists: ${{ steps.check_jenkins.outputs.exists }}
+    
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/base-infra
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Configure Terraform credentials
+        run: |
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+      
+      - name: Terraform Init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        run: terraform init
+      
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Get Terraform Outputs
+        id: terraform_output
+        run: |
+          JENKINS_IP=$(terraform output -raw jenkins_vm_public_ip)
+          echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
+          echo "Jenkins VM IP: $JENKINS_IP"
+      
+      - name: Check if Jenkins is accessible
+        id: check_jenkins
+        run: |
+          JENKINS_IP="${{ steps.terraform_output.outputs.jenkins_vm_ip }}"
+          
+          # Try to reach Jenkins (retry up to 5 times)
+          for i in {1..5}; do
+            if curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 http://$JENKINS_IP:8090 | grep -q "200\|403"; then
+              echo "exists=true" >> $GITHUB_OUTPUT
+              echo "Jenkins is accessible at $JENKINS_IP"
+              exit 0
+            fi
+            echo "Attempt $i: Jenkins not accessible yet, waiting..."
+            sleep 10
+          done
+          
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Jenkins is not accessible, needs full deployment"
+  
+  ansible-deploy:
+    name: Deploy/Update Jenkins with Ansible
+    needs: terraform-base-infra
+    runs-on: ubuntu-latest
+    if: ${{ needs.terraform-base-infra.outputs.jenkins_exists == 'false' || github.event.inputs.force_ansible_deploy == 'true' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Ansible
+        run: |
+          pip install ansible==${{ env.ANSIBLE_VERSION }}
+          pip install boto3 botocore
+      
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.JENKINS_VM_PRIVATE_KEY }}" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+          ssh-keyscan -H ${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Create Jenkins .env file
+        run: |
+          cat > infra/jenkins/.env <<EOF
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          DOCKER_REGISTRY_USER=${{ secrets.DOCKER_REGISTRY_USER }}
+          DOCKER_REGISTRY_PASS=${{ secrets.DOCKER_REGISTRY_PASS }}
+          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
+          KUBECONFIG_DEV_BASE64=${{ secrets.KUBECONFIG_DEV_BASE64 }}
+          KUBECONFIG_PROD_BASE64=${{ secrets.KUBECONFIG_PROD_BASE64 }}
+          JENKINS_ADMIN_USER=${{ secrets.JENKINS_ADMIN_USER }}
+          JENKINS_ADMIN_PASSWORD=${{ secrets.JENKINS_ADMIN_PASSWORD }}
+          SONAR_ADMIN_PASSWORD=${{ secrets.SONAR_ADMIN_PASSWORD }}
+          SONAR_DB_PASSWORD=${{ secrets.SONAR_DB_PASSWORD }}
+          POSTGRES_USER=sonar
+          POSTGRES_PASSWORD=${{ secrets.SONAR_DB_PASSWORD }}
+          SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}
+          EOF
+      
+      - name: Update Ansible inventory
+        run: |
+          cat > infra/ansible/inventory/hosts.yml <<EOF
+          all:
+            children:
+              jenkins:
+                hosts:
+                  jenkins_vm:
+                    ansible_host: ${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }}
+                    ansible_user: ubuntu
+                    ansible_ssh_private_key_file: ~/.ssh/vm_key
+                    ansible_python_interpreter: /usr/bin/python3
+                    jenkins_source_path: ../../jenkins
+                    jenkins_deploy_path: /home/ubuntu/jenkins
+          EOF
+      
+      - name: Run Ansible Playbook
+        run: |
+          cd infra/ansible
+          ansible-playbook -i inventory/hosts.yml deploy.yml -v
+      
+      - name: Verify Jenkins deployment
+        run: |
+          JENKINS_IP="${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }}"
+          echo "Waiting for Jenkins to be fully ready..."
+          
+          for i in {1..60}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://$JENKINS_IP:8090/login | grep -q "200"; then
+              echo "✅ Jenkins is ready!"
+              exit 0
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 10
+          done
+          
+          echo "❌ Jenkins failed to start properly"
+          exit 1
+  
+  ansible-update-casc:
+    name: Update Jenkins CasC only
+    needs: terraform-base-infra
+    runs-on: ubuntu-latest
+    if: ${{ needs.terraform-base-infra.outputs.jenkins_exists == 'true' && github.event.inputs.force_ansible_deploy != 'true' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.JENKINS_VM_PRIVATE_KEY }}" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+          ssh-keyscan -H ${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Create Jenkins .env file
+        run: |
+          cat > infra/jenkins/.env <<EOF
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          DOCKER_REGISTRY_USER=${{ secrets.DOCKER_REGISTRY_USER }}
+          DOCKER_REGISTRY_PASS=${{ secrets.DOCKER_REGISTRY_PASS }}
+          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
+          KUBECONFIG_DEV_BASE64=${{ secrets.KUBECONFIG_DEV_BASE64 }}
+          KUBECONFIG_PROD_BASE64=${{ secrets.KUBECONFIG_PROD_BASE64 }}
+          JENKINS_ADMIN_USER=${{ secrets.JENKINS_ADMIN_USER }}
+          JENKINS_ADMIN_PASSWORD=${{ secrets.JENKINS_ADMIN_PASSWORD }}
+          SONAR_ADMIN_PASSWORD=${{ secrets.SONAR_ADMIN_PASSWORD }}
+          SONAR_DB_PASSWORD=${{ secrets.SONAR_DB_PASSWORD }}
+          POSTGRES_USER=sonar
+          POSTGRES_PASSWORD=${{ secrets.SONAR_DB_PASSWORD }}
+          SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}
+          EOF
+      
+      - name: Update CasC configuration
+        run: |
+          JENKINS_IP="${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }}"
+          
+          # Copy updated files to Jenkins VM
+          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          
+          # Restart Jenkins container to reload CasC
+          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+          
+          echo "✅ Jenkins CasC configuration updated"
+      
+      - name: Verify Jenkins is healthy
+        run: |
+          JENKINS_IP="${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }}"
+          
+          for i in {1..30}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://$JENKINS_IP:8090/login | grep -q "200"; then
+              echo "✅ Jenkins is healthy after restart"
+              exit 0
+            fi
+            echo "Waiting for Jenkins... ($i/30)"
+            sleep 10
+          done
+          
+          echo "❌ Jenkins health check failed"
+          exit 1
