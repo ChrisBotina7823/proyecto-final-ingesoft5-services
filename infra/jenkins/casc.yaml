@@ -54,15 +54,15 @@ credentials:
           - file:
               scope: GLOBAL
               id: "kubeconfig-dev"
-              fileName: "kubeconfig-dev"
-              secretBytes: ${file:/var/jenkins_home/kubeconfig-dev}
+              fileName: "kubeconfig"
+              secretBytes: "${readFile:/var/jenkins_home/kubeconfig-dev.base64}"
               description: "Kubernetes Dev Cluster Config"
               
           - file:
               scope: GLOBAL
               id: "kubeconfig-prod"
-              fileName: "kubeconfig-prod"
-              secretBytes: ${file:/var/jenkins_home/kubeconfig-prod}
+              fileName: "kubeconfig"
+              secretBytes: "${readFile:/var/jenkins_home/kubeconfig-prod.base64}"
               description: "Kubernetes Prod Cluster Config"
               
           - usernamePassword:

@@ -10,3 +10,4 @@
 *.xml linguist-language=xml
 
 *.sh text eol=lf
+**vm_key** eol=lf

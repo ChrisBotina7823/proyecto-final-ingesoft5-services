@@ -1,4 +1,4 @@
-FROM jenkins/jenkins:2.479-jdk17
+FROM jenkins/jenkins:2.479.3-jdk17
 
 # Skip setup wizard
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
