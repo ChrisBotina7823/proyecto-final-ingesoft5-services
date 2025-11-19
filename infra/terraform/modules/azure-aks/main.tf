@@ -54,6 +54,32 @@ resource "azurerm_network_security_group" "aks" {
     destination_address_prefix = "*"
   }
 
+  # Allow Grafana NodePort access
+  security_rule {
+    name                       = "AllowGrafanaNodePort"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "30300"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  # Allow Prometheus NodePort access
+  security_rule {
+    name                       = "AllowPrometheusNodePort"
+    priority                   = 130
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "30900"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
   tags = var.tags
 }
 
