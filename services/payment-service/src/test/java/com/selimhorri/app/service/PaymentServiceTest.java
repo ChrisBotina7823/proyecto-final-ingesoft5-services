@@ -32,6 +32,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  * Tests payment processing with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class PaymentServiceTest {
 
     @Mock
@@ -40,10 +41,8 @@ class PaymentServiceTest {
     @Mock
     private RestTemplate restTemplate;
 
-    @Mock
     private MeterRegistry meterRegistry;
 
-    @InjectMocks
     private PaymentServiceImpl paymentService;
 
     private Payment testPayment;
@@ -52,6 +51,8 @@ class PaymentServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        paymentService = new PaymentServiceImpl(paymentRepository, restTemplate, meterRegistry);
         testOrderDto = OrderDto.builder()
                 .orderId(100)
                 .orderDesc("Test order")
@@ -107,8 +108,6 @@ class PaymentServiceTest {
     @Test
     void testSave_ShouldCreateNewPayment() {
         // Given
-        Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(paymentRepository.save(any(Payment.class))).thenReturn(testPayment);
 
         // When

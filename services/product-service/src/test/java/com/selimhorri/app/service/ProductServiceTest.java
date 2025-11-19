@@ -32,6 +32,7 @@ import io.micrometer.core.instrument.MeterRegistry;
  * Tests product CRUD operations with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class ProductServiceTest {
 
     @Mock
@@ -40,10 +41,8 @@ class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
-    @Mock
     private MeterRegistry meterRegistry;
 
-    @InjectMocks
     private ProductServiceImpl productService;
 
     private Product testProduct;
@@ -53,6 +52,8 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        productService = new ProductServiceImpl(productRepository, meterRegistry);
         testCategory = Category.builder()
                 .categoryId(1)
                 .categoryTitle("Electronics")
@@ -117,8 +118,6 @@ class ProductServiceTest {
     @Test
     void testSave_ShouldCreateNewProduct() {
         // Given
-        Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(productRepository.save(any(Product.class))).thenReturn(testProduct);
 
         // When

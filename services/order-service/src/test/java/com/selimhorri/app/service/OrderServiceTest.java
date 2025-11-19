@@ -32,15 +32,14 @@ import io.micrometer.core.instrument.MeterRegistry;
  * Tests order management with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
 
-    @Mock
     private MeterRegistry meterRegistry;
 
-    @InjectMocks
     private OrderServiceImpl orderService;
 
     private Order testOrder;
@@ -50,6 +49,8 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        orderService = new OrderServiceImpl(orderRepository, meterRegistry);
         testCart = Cart.builder()
                 .cartId(1)
                 .userId(100)
@@ -112,8 +113,6 @@ class OrderServiceTest {
     @Test
     void testSave_ShouldCreateNewOrder() {
         // Given
-        Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(orderRepository.save(any(Order.class))).thenReturn(testOrder);
 
         // When

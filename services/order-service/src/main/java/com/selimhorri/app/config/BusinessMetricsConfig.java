@@ -17,7 +17,6 @@ import java.util.concurrent.atomic.AtomicReference;
 @Configuration
 @EnableScheduling
 @Slf4j
-@RequiredArgsConstructor
 public class BusinessMetricsConfig {
     
     private final MeterRegistry meterRegistry;

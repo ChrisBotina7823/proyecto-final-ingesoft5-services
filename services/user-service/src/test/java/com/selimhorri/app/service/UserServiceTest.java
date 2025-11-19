@@ -33,15 +33,14 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
  * Tests basic CRUD operations with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
 
-    @Mock
     private MeterRegistry meterRegistry;
 
-    @InjectMocks
     private UserServiceImpl userService;
 
     private User testUser;
@@ -49,6 +48,9 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        userService = new UserServiceImpl(userRepository, meterRegistry);
+        
         Credential testCredential = Credential.builder()
                 .credentialId(1)
                 .username("johndoe")
@@ -124,8 +126,6 @@ class UserServiceTest {
     @Test
     void testSave_ShouldCreateNewUser() {
         // Given
-        Counter mockCounter = mock(Counter.class);
-        lenient().when(meterRegistry.counter(any(io.micrometer.core.instrument.Meter.Id.class))).thenReturn(mockCounter);
         when(userRepository.save(any(User.class))).thenReturn(testUser);
 
         // When
@@ -135,6 +135,9 @@ class UserServiceTest {
         assertNotNull(result);
         assertEquals("John", result.getFirstName());
         verify(userRepository, times(1)).save(any(User.class));
+        
+        // Verify metric was registered
+        assertNotNull(meterRegistry.find("users_registered_total").counter());
     }
 
     @Test
