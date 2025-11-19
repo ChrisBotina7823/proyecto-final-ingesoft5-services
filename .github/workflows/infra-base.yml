@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
       - 'infra/**'
     paths:
       - 'infra/terraform/environments/base-infra/**'
@@ -55,6 +56,13 @@ jobs:
           tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
           EOF
       
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: eu-west-2
+
       - name: Terraform Init
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
@@ -70,7 +78,7 @@ jobs:
       - name: Get Terraform Outputs
         id: terraform_output
         run: |
-          JENKINS_IP=$(terraform output -raw jenkins_vm_public_ip)
+          JENKINS_IP=$(terraform output -raw jenkins_public_ip)
           echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
           echo "Jenkins VM IP: $JENKINS_IP"
       

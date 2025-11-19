@@ -24,6 +24,9 @@ import com.selimhorri.app.repository.ProductRepository;
 import com.selimhorri.app.repository.CategoryRepository;
 import com.selimhorri.app.service.impl.ProductServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Unit tests for ProductService
  * Tests product CRUD operations with mocked dependencies
@@ -36,6 +39,9 @@ class ProductServiceTest {
 
     @Mock
     private CategoryRepository categoryRepository;
+
+    @Mock
+    private MeterRegistry meterRegistry;
 
     @InjectMocks
     private ProductServiceImpl productService;
@@ -111,6 +117,8 @@ class ProductServiceTest {
     @Test
     void testSave_ShouldCreateNewProduct() {
         // Given
+        Counter mockCounter = mock(Counter.class);
+        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(productRepository.save(any(Product.class))).thenReturn(testProduct);
 
         // When

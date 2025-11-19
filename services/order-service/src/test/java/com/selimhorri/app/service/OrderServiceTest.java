@@ -24,6 +24,9 @@ import com.selimhorri.app.helper.OrderMappingHelper;
 import com.selimhorri.app.repository.OrderRepository;
 import com.selimhorri.app.service.impl.OrderServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Unit tests for OrderService
  * Tests order management with mocked dependencies
@@ -33,6 +36,9 @@ class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
+
+    @Mock
+    private MeterRegistry meterRegistry;
 
     @InjectMocks
     private OrderServiceImpl orderService;
@@ -106,6 +112,8 @@ class OrderServiceTest {
     @Test
     void testSave_ShouldCreateNewOrder() {
         // Given
+        Counter mockCounter = mock(Counter.class);
+        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(orderRepository.save(any(Order.class))).thenReturn(testOrder);
 
         // When

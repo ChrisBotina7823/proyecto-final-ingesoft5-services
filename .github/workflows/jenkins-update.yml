@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
       - 'infra/**'
     paths:
       - 'infra/jenkins/casc.yaml'
@@ -53,7 +54,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
           ./terraform init
           
-          JENKINS_IP=$(./terraform output -raw jenkins_vm_public_ip)
+          JENKINS_IP=$(./terraform output -raw jenkins_public_ip)
           echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
           echo "Jenkins VM IP: $JENKINS_IP"
       
