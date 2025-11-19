@@ -1,33 +1,200 @@
-# Microservices modifications
+# Microservices
 
-## Folder Structure and Docker files
+E-commerce microservices architecture with fixes, resilience patterns, and observability.
 
-- As the repository structure was messy at the beginning, containing workflows that will not be used in this repo, wrappers for the general application and documentation directly in the root folder, some structural changes were made:
+## Services
 
-1. Separate the microservices in a folder `services`, and remove the maven wrapper at the root
-2. Move all the diagrams to the `docs` folder
-3. Remove the separate `compose.yml` files for each microservice, as we are going to build them using the Dockerfiles 
+- `service-discovery` - Eureka server for service registration
+- `cloud-config` - Centralized configuration management
+- `api-gateway` - Entry point with routing and load balancing
+- `user-service` - User management and authentication
+- `product-service` - Product catalog
+- `order-service` - Order processing
+- `payment-service` - Payment processing with external integration
+- `shipping-service` - Shipping and delivery management
+- `favourite-service` - User favorites and wishlist
+- `proxy-client` - Client proxy for service communication
 
-- The repository `proyecto-final-ingesoft5-services/compose.yml` was updated to build each microservice from the local Dockerfiles located under `services/<service-name>/Dockerfile` instead of pulling images from Docker Hub.
+## Fixes Applied
 
-**Note:** API gateway and User service were trying to copy from the root folder, so the copy steps were adapted so that it works from each microservice folder
+**Mapper Issues**: Original implementation attempted to persist ID fields incorrectly during entity mapping.
 
-- Quick run (from the `proyecto-final-ingesoft5-services` folder):
+Problem: Mappers tried to populate ID fields before persistence, causing database constraint violations.
 
-```powershell
-docker compose up --build -d
-docker compose logs -f
-docker compose down
+Solution: Corrected mapper direction to respect JPA relationship ownership. Parent entities now properly cascade to children without manual ID assignment.
+
+**N+1 Query Problem**: Fetching lists of entities with relationships triggered individual queries per item.
+
+Problem: Loading orders with associated users caused one query for orders plus N queries for users (one per order).
+
+Current state: Issue identified and documented. Lazy loading with fetch joins recommended for future optimization.
+
+**Spring Boot Relationship Mapping**: Bidirectional relationships not properly configured.
+
+Solution: Added `@JsonManagedReference` and `@JsonBackReference` to prevent serialization loops. Configured proper cascade types and fetch strategies.
+
+## Resilience Patterns
+
+Implemented in `order-service` for user service communication.
+
+**Retry**: Automatic retry on transient failures.
+```java
+@Retry(name = "userService", fallbackMethod = "getUserFallback")
+public User getUser(Long userId) { ... }
 ```
 
-## Service Dependencies and Startup Order
+Configuration:
+- Max attempts: 3
+- Wait duration: 1 second
+- Exponential backoff
 
-The `compose.yml` has been configured with proper service dependencies using `depends_on` and `restart` policies to ensure services start in the correct order:
+**Circuit Breaker**: Prevents cascading failures.
+```java
+@CircuitBreaker(name = "userService", fallbackMethod = "getUserFallback")
+```
 
-- The services Zipkin, Cloud Config Server and Service Discovery are independent from the other microservices, so they should start first and have a proper healthcheck that ensures that they are not only up, but receiving requests
+States:
+- Closed: Normal operation
+- Open: Reject requests immediately (50% failure threshold)
+- Half-Open: Test if service recovered
 
-- The api-gateway, favourite-service, order-service, payment-service, product-service, proxy-client, shipping-service and user-service should depend on the config server and service discovery, since they need to fetch their configuration and register in Eureka
+Configuration:
+- Failure rate threshold: 50%
+- Wait duration in open state: 10 seconds
+- Permitted calls in half-open: 3
 
-### Springboot Actuator
+**Bulkhead**: Resource isolation.
+```java
+@Bulkhead(name = "userService", fallbackMethod = "getUserFallback")
+```
 
-To implement easily the healthcheck for the microservices, the actuator dependency was added in `pom.xml` for each microservice.
+Limits:
+- Max concurrent calls: 10
+- Max wait duration: 0ms (fail fast)
+
+Prevents resource exhaustion from affecting entire application.
+
+**Combined Pattern**:
+```java
+@Retry(name = "userService")
+@CircuitBreaker(name = "userService", fallbackMethod = "getUserFallback")
+@Bulkhead(name = "userService")
+public User getUserById(Long userId) {
+    return restTemplate.getForObject(userServiceUrl + "/" + userId, User.class);
+}
+
+private User getUserFallback(Long userId, Exception e) {
+    return User.builder()
+        .id(userId)
+        .username("unavailable")
+        .email("service-unavailable@system.local")
+        .build();
+}
+```
+
+## Health Checks
+
+All services implement Spring Boot Actuator health endpoints.
+
+**Liveness**: `/actuator/health/liveness`
+- Indicates if application is running
+- Used by Kubernetes to restart unhealthy pods
+
+**Readiness**: `/actuator/health/readiness`
+- Indicates if application can serve traffic
+- Checks database connectivity and external service availability
+- Used by Kubernetes to route traffic
+
+**Full Health**: `/actuator/health`
+- Detailed health information including database status and disk space
+
+Configuration:
+```yaml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+```
+
+## Business Metrics
+
+Custom metrics exposed via Micrometer for business intelligence.
+
+**User Service**:
+- `users_registered_total` - Counter of user registrations
+- `users_active_count` - Gauge of active users
+
+**Order Service**:
+- `orders_created_total` - Counter of orders placed
+- `cart_abandonment_rate` - Gauge of abandoned carts percentage
+
+**Payment Service**:
+- `payments_processed_total` - Counter of successful payments
+- `payments_failed_total` - Counter of failed payments
+
+**Implementation**:
+```java
+@Configuration
+public class BusinessMetricsConfig {
+    private final MeterRegistry meterRegistry;
+    
+    @Bean
+    public Counter userRegistrationCounter() {
+        return Counter.builder("users_registered_total")
+            .description("Total number of user registrations")
+            .register(meterRegistry);
+    }
+}
+```
+
+**Usage in service**:
+```java
+@Service
+public class UserServiceImpl {
+    private final Counter registrationCounter;
+    
+    public User createUser(UserRequest request) {
+        User user = // ... create user
+        registrationCounter.increment();
+        return user;
+    }
+}
+```
+
+Metrics available at `/actuator/prometheus` for Prometheus scraping.
+
+## Monitoring Integration
+
+**Prometheus**: Scrapes metrics from `/actuator/prometheus` endpoint.
+
+**Grafana**: Visualizes metrics in custom dashboards.
+
+**Loki**: Aggregates logs from all services.
+
+**Service Discovery**: ServiceMonitor automatically configures Prometheus targets.
+
+## Configuration
+
+**External Configuration**: Cloud Config Server provides centralized configuration.
+
+**Environment-Specific**: Profiles for dev and prod with different database URLs and API keys.
+
+**Secrets**: Kubernetes Secrets for sensitive data (database passwords, API keys).
+
+## Database Schema
+
+Each service has isolated database:
+- `user_db`
+- `product_db`
+- `order_db`
+- `payment_db`
+- `shipping_db`
+- `favourite_db`
+
+No shared database access ensuring service independence.
