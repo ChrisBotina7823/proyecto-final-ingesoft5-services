@@ -1,0 +1,309 @@
+name: Infrastructure - Environments (AKS)
+
+on:
+  push:
+    branches:
+      - main
+      - 'infra/**'
+    paths:
+      - 'infra/terraform/environments/dev/**'
+      - 'infra/terraform/environments/prod/**'
+      - 'infra/terraform/modules/**'
+      - '.github/workflows/infra-environments.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev, prod, or both)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+          - both
+        default: 'both'
+
+env:
+  TF_VERSION: '1.9.0'
+
+jobs:
+  detect-changes:
+    name: Detect Changed Environments
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_dev: ${{ steps.changes.outputs.dev }}
+      deploy_prod: ${{ steps.changes.outputs.prod }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Detect changes
+        id: changes
+        run: |
+          # If workflow_dispatch, use input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            case "${{ github.event.inputs.environment }}" in
+              dev)
+                echo "dev=true" >> $GITHUB_OUTPUT
+                echo "prod=false" >> $GITHUB_OUTPUT
+                ;;
+              prod)
+                echo "dev=false" >> $GITHUB_OUTPUT
+                echo "prod=true" >> $GITHUB_OUTPUT
+                ;;
+              both)
+                echo "dev=true" >> $GITHUB_OUTPUT
+                echo "prod=true" >> $GITHUB_OUTPUT
+                ;;
+            esac
+          else
+            # Check changed files
+            if git diff --name-only HEAD~1 HEAD | grep -q "infra/terraform/environments/dev/\|infra/terraform/modules/"; then
+              echo "dev=true" >> $GITHUB_OUTPUT
+            else
+              echo "dev=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if git diff --name-only HEAD~1 HEAD | grep -q "infra/terraform/environments/prod/\|infra/terraform/modules/"; then
+              echo "prod=true" >> $GITHUB_OUTPUT
+            else
+              echo "prod=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+          echo "Deploy Dev: $(cat $GITHUB_OUTPUT | grep dev=)"
+          echo "Deploy Prod: $(cat $GITHUB_OUTPUT | grep prod=)"
+  
+  terraform-dev:
+    name: Deploy Dev Environment (AKS)
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.deploy_dev == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      kubeconfig: ${{ steps.get_kubeconfig.outputs.kubeconfig }}
+    
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/dev
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+      
+      - name: Configure Terraform credentials
+        run: |
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+      
+      - name: Terraform Init (with S3 backend)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        run: terraform init
+      
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Get AKS credentials and generate kubeconfig
+        id: get_kubeconfig
+        run: |
+          # Always use PROD cluster credentials
+          az aks get-credentials --resource-group rg-prod-ecommerce --name aks-prod-ecommerce --file ./kubeconfig-dev --overwrite-existing
+          
+          # Convert to base64 for secret storage
+          KUBECONFIG_BASE64=$(cat ./kubeconfig-dev | base64 -w 0)
+          echo "kubeconfig=$KUBECONFIG_BASE64" >> $GITHUB_OUTPUT
+          
+          echo "Dev kubeconfig generated from PROD cluster"
+      
+      - name: Verify AKS cluster
+        run: |
+          export KUBECONFIG=./kubeconfig-dev
+          kubectl cluster-info
+          kubectl get nodes
+  
+  terraform-prod:
+    name: Deploy Prod Environment (AKS)
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.deploy_prod == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      kubeconfig: ${{ steps.get_kubeconfig.outputs.kubeconfig }}
+    
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/prod
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: |
+            {
+              "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
+              "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
+              "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
+              "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
+            }
+      
+      - name: Configure Terraform credentials
+        run: |
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+      
+      - name: Terraform Init (with S3 backend)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+        run: terraform init
+      
+      - name: Terraform Plan
+        run: terraform plan -out=tfplan
+      
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+      
+      - name: Get AKS credentials and generate kubeconfig
+        id: get_kubeconfig
+        run: |
+          # Always use PROD cluster credentials
+          az aks get-credentials --resource-group rg-prod-ecommerce --name aks-prod-ecommerce --file ./kubeconfig-prod --overwrite-existing
+          
+          # Convert to base64 for secret storage
+          KUBECONFIG_BASE64=$(cat ./kubeconfig-prod | base64 -w 0)
+          echo "kubeconfig=$KUBECONFIG_BASE64" >> $GITHUB_OUTPUT
+          
+          echo "Prod kubeconfig generated from PROD cluster"
+      
+      - name: Verify AKS cluster
+        run: |
+          export KUBECONFIG=./kubeconfig-prod
+          kubectl cluster-info
+          kubectl get nodes
+  
+  update-jenkins-kubeconfig:
+    name: Update Jenkins with new kubeconfigs
+    needs: [detect-changes, terraform-dev, terraform-prod]
+    if: always() && (needs.terraform-dev.result == 'success' || needs.terraform-prod.result == 'success')
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get Jenkins VM IP from base-infra
+        id: get_jenkins_ip
+        run: |
+          cd infra/terraform/environments/base-infra
+          
+          # Configure Terraform credentials
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+          
+          # Setup Terraform
+          wget -q https://releases.hashicorp.com/terraform/1.9.0/terraform_1.9.0_linux_amd64.zip
+          unzip -q terraform_1.9.0_linux_amd64.zip
+          chmod +x terraform
+          
+          # Init with S3 backend
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY }}" \
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
+          ./terraform init
+          
+          JENKINS_IP=$(./terraform output -raw jenkins_vm_public_ip)
+          echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
+      
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.JENKINS_VM_PRIVATE_KEY }}" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+          ssh-keyscan -H ${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Update kubeconfig files on Jenkins VM
+        run: |
+          JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
+          
+          # Update dev kubeconfig if available
+          if [ "${{ needs.terraform-dev.result }}" == "success" ]; then
+            echo "${{ needs.terraform-dev.outputs.kubeconfig }}" | base64 -d > kubeconfig-dev
+            scp -i ~/.ssh/vm_key kubeconfig-dev ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            echo "Dev kubeconfig updated on Jenkins VM"
+          fi
+          
+          # Update prod kubeconfig if available
+          if [ "${{ needs.terraform-prod.result }}" == "success" ]; then
+            echo "${{ needs.terraform-prod.outputs.kubeconfig }}" | base64 -d > kubeconfig-prod
+            scp -i ~/.ssh/vm_key kubeconfig-prod ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            echo "Prod kubeconfig updated on Jenkins VM"
+          fi
+          
+          # Restart Jenkins to reload credentials
+          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+          
+          echo "Jenkins restarted with new kubeconfig files"
+      
+      - name: Verify Jenkins is healthy
+        run: |
+          JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
+          
+          for i in {1..30}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://$JENKINS_IP:8090/login | grep -q "200"; then
+              echo "Jenkins is healthy after kubeconfig update"
+              exit 0
+            fi
+            echo "Waiting for Jenkins... ($i/30)"
+            sleep 10
+          done
+          
+          echo "Jenkins health check failed"
+          exit 1

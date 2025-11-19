@@ -1,0 +1,13 @@
+# Backend configuration for Terraform state
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to git!
+
+# Azure Service Principal credentials
+subscription_id = "your-subscription-id"
+client_id       = "your-client-id"
+client_secret   = "your-client-secret"
+tenant_id       = "your-tenant-id"
+
+# Optional: Override default Azure location
+# location = "West US"
+

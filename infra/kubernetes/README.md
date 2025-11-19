@@ -4,7 +4,7 @@ Kubernetes deployment configuration for microservices using Kustomize.
 
 ## Architecture
 
-All services deployed to `ecommerce-prod` namespace with:
+All services deployed to `prod` namespace with:
 
 - Service discovery via Eureka
 - Centralized configuration via Spring Cloud Config
@@ -18,10 +18,10 @@ All services deployed to `ecommerce-prod` namespace with:
 kubectl apply -k infra/kubernetes/
 
 # Check deployment status
-kubectl get pods -n ecommerce-prod
+kubectl get pods -n prod
 
 # Access API Gateway locally
-kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod
+kubectl port-forward svc/api-gateway 8080:8080 -n prod
 ```
 
 ## Services Deployed
@@ -43,7 +43,7 @@ kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod
 
 Using `kustomization.yaml` for:
 
-- **Namespace**: All resources in `ecommerce-prod`
+- **Namespace**: All resources in `prod`
 - **Image tags**: Updated via Jenkins pipeline with commit hash
 - **Common labels**: `app: ecommerce`, `environment: production`
 - **Registry secret**: `ghcr-secret` for pulling private images
@@ -100,23 +100,23 @@ readinessProbe:
 
 ```powershell
 # Get external IP (if LoadBalancer provisioned)
-kubectl get svc api-gateway -n ecommerce-prod
+kubectl get svc api-gateway -n prod
 
 # Port-forward for local testing
-kubectl port-forward svc/api-gateway 8080:8080 -n ecommerce-prod
+kubectl port-forward svc/api-gateway 8080:8080 -n prod
 ```
 
 ### Eureka Dashboard
 
 ```powershell
-kubectl port-forward svc/service-discovery 8761:8761 -n ecommerce-prod
+kubectl port-forward svc/service-discovery 8761:8761 -n prod
 # Open http://localhost:8761
 ```
 
 ### Config Server
 
 ```powershell
-kubectl port-forward svc/cloud-config 8888:8888 -n ecommerce-prod
+kubectl port-forward svc/cloud-config 8888:8888 -n prod
 # Test: curl http://localhost:8888/user-service/default
 ```
 
@@ -134,7 +134,7 @@ Jenkins pipeline stages:
 Pipeline uses localhost connection to avoid network issues:
 
 ```bash
-kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
+kubectl port-forward svc/api-gateway 9090:8080 -n prod &
 # Tests run against http://localhost:9090
 ```
 
@@ -145,7 +145,7 @@ kubectl port-forward svc/api-gateway 9090:8080 -n ecommerce-prod &
 Check events:
 
 ```powershell
-kubectl describe pod <pod-name> -n ecommerce-prod
+kubectl describe pod <pod-name> -n prod
 ```
 
 Common issues:
@@ -158,7 +158,7 @@ Common issues:
 Verify Eureka registration:
 
 ```powershell
-kubectl logs <service-pod> -n ecommerce-prod | grep "Registered instance"
+kubectl logs <service-pod> -n prod | grep "Registered instance"
 ```
 
 All services should register with Eureka at startup.
@@ -171,10 +171,10 @@ Services use in-memory H2 databases for demo purposes. No external DB required.
 
 ```powershell
 # Delete all resources
-kubectl delete namespace ecommerce-prod
+kubectl delete namespace prod
 
 # Or delete specific deployment
-kubectl delete deployment <service-name> -n ecommerce-prod
+kubectl delete deployment <service-name> -n prod
 ```
 
 ## Infrastructure as Code

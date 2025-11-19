@@ -16,6 +16,10 @@ import com.selimhorri.app.helper.CartMappingHelper;
 import com.selimhorri.app.repository.CartRepository;
 import com.selimhorri.app.service.CartService;
 
+import com.selimhorri.app.client.UserServiceClient;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -27,6 +31,8 @@ public class CartServiceImpl implements CartService {
 	
 	private final CartRepository cartRepository;
 	private final RestTemplate restTemplate;
+	private final UserServiceClient userServiceClient;
+	private final MeterRegistry meterRegistry;
 	
 	@Override
 	public List<CartDto> findAll() {
@@ -35,8 +41,7 @@ public class CartServiceImpl implements CartService {
 				.stream()
 					.map(CartMappingHelper::map)
 					.map(c -> {
-						c.setUserDto(this.restTemplate.getForObject(AppConstant.DiscoveredDomainsApi
-								.USER_SERVICE_API_URL + "/" + c.getUserDto().getUserId(), UserDto.class));
+						c.setUserDto(this.userServiceClient.getUserById(c.getUserDto().getUserId()));
 						return c;
 					})
 					.distinct()
@@ -49,8 +54,7 @@ public class CartServiceImpl implements CartService {
 		return this.cartRepository.findById(cartId)
 				.map(CartMappingHelper::map)
 				.map(c -> {
-					c.setUserDto(this.restTemplate.getForObject(AppConstant.DiscoveredDomainsApi
-							.USER_SERVICE_API_URL + "/" + c.getUserDto().getUserId(), UserDto.class));
+		    c.setUserDto(this.userServiceClient.getUserById(c.getUserDto().getUserId()));
 					return c;
 				})
 				.orElseThrow(() -> new CartNotFoundException(String
@@ -81,6 +85,14 @@ public class CartServiceImpl implements CartService {
 	@Override
 	public void deleteById(final Integer cartId) {
 		log.info("*** Void, service; delete cart by id *");
+		
+		// Business metric: Track cart deletions (potential abandonment indicator)
+		Counter.builder("carts_deleted_total")
+				.description("Total number of carts deleted (potential abandonment)")
+				.tag("application", "order-service")
+				.register(meterRegistry)
+				.increment();
+		
 		this.cartRepository.deleteById(cartId);
 	}
 	

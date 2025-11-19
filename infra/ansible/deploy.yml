@@ -1,0 +1,8 @@
+---
+- name: Deploy Jenkins
+  hosts: jenkins
+  become: yes
+  
+  tasks:
+    - import_tasks: tasks/docker.yml
+    - import_tasks: tasks/deploy.yml

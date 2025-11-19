@@ -53,10 +53,17 @@ credentials:
             
           - file:
               scope: GLOBAL
-              id: "kubeconfig"
+              id: "kubeconfig-dev"
               fileName: "kubeconfig"
-              secretBytes: ${KUBECONFIG_BASE64}
-              description: "Local Kubernetes Cluster Config"
+              secretBytes: "${readFile:/var/jenkins_home/kubeconfig-dev.base64}"
+              description: "Kubernetes Dev Cluster Config"
+              
+          - file:
+              scope: GLOBAL
+              id: "kubeconfig-prod"
+              fileName: "kubeconfig"
+              secretBytes: "${readFile:/var/jenkins_home/kubeconfig-prod.base64}"
+              description: "Kubernetes Prod Cluster Config"
               
           - usernamePassword:
               scope: GLOBAL
@@ -64,15 +71,29 @@ credentials:
               username: "admin"
               password: "${SONAR_ADMIN_PASSWORD}"
               description: "SonarQube Admin Credentials"
+              
+          - string:
+              scope: GLOBAL
+              id: "slack-token"
+              secret: "${SLACK_TOKEN}"
+              description: "Slack Bot Token"
+              
+          - usernamePassword:
+              scope: GLOBAL
+              id: "smtp-credentials"
+              username: "${SMTP_USER}"
+              password: "${SMTP_PASSWORD}"
+              description: "SMTP Email Credentials"
 
 unclassified:
   location:
-    url: "http://localhost:8090/"
+    url: "${JENKINS_URL}"
     
   gitHubPluginConfig:
     configs:
       - name: "GitHub"
         credentialsId: "github-token"
+        manageHooks: true
         
   timestamper:
     allPipelines: true
@@ -82,16 +103,39 @@ unclassified:
       - name: "SonarQube"
         serverUrl: "http://sonarqube:9000"
         credentialsId: "sonarqube-admin"
+        
+  gitHubConfiguration:
+    apiRateLimitChecker: ThrottleOnOver
+    
+  slackNotifier:
+    teamDomain: "${SLACK_WORKSPACE}"
+    tokenCredentialId: "slack-token"
+    botUser: true
+    baseUrl: "https://slack.com/api"
+    room: "#deployments"
+    sendAsText: false
+    
+  mailer:
+    smtpHost: "${SMTP_HOST:-smtp.gmail.com}"
+    smtpPort: "587"
+    useSsl: false
+    useTls: true
+    charset: "UTF-8"
+    defaultSuffix: "@gmail.com"
+    replyToAddress: "noreply@ci.local"
+    authentication:
+      username: "${SMTP_USER}"
+      password: "${SMTP_PASSWORD}"
 
 jobs:
   - script: >
       multibranchPipelineJob('ecommerce-microservices') {
         branchSources {
-          git {
+          github {
             id('ecommerce-repo')
-            remote('https://github.com/ChrisBotina7823/proyecto-final-ingesoft5-services.git')
-            credentialsId('github-token')
-            includes('main develop')
+            repoOwner('ChrisBotina7823')
+            repository('proyecto-final-ingesoft5-services')
+            scanCredentialsId('github-token')
           }
         }
         orphanedItemStrategy {
@@ -101,7 +145,7 @@ jobs:
         }
         triggers {
           periodicFolderTrigger {
-            interval('5m')
+            interval('1m')
           }
         }
       }

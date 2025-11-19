@@ -1,0 +1,250 @@
+global:
+  registry: ghcr.io/chrisbotina7823
+  pullPolicy: IfNotPresent
+  imageTag: latest
+  namespace: prod
+  environment: production
+  
+  imagePullSecrets:
+    - name: ghcr-secret
+
+namespace:
+  create: true
+  name: prod
+  labels:
+    environment: production
+    project: ecommerce-microservices
+
+services:
+  serviceDiscovery:
+    enabled: true
+    name: service-discovery
+    image: service-discovery
+    port: 8761
+    replicas: 1
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 240
+      periodSeconds: 30
+      timeoutSeconds: 10
+
+  cloudConfig:
+    enabled: true
+    name: cloud-config
+    image: cloud-config
+    port: 9296
+    replicas: 1
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 240
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  apiGateway:
+    enabled: true
+    name: api-gateway
+    image: api-gateway
+    port: 8080
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  proxyClient:
+    enabled: true
+    name: proxy-client
+    image: proxy-client
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  userService:
+    enabled: true
+    name: user-service
+    image: user-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  productService:
+    enabled: true
+    name: product-service
+    image: product-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  favouriteService:
+    enabled: true
+    name: favourite-service
+    image: favourite-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  orderService:
+    enabled: true
+    name: order-service
+    image: order-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  shippingService:
+    enabled: true
+    name: shipping-service
+    image: shipping-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  paymentService:
+    enabled: true
+    name: payment-service
+    image: payment-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "200m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+    healthCheck:
+      enabled: true
+      path: /actuator/health
+      initialDelaySeconds: 300
+      periodSeconds: 30
+      timeoutSeconds: 10
+    env:
+      SPRING_PROFILES_ACTIVE: dev
+
+  zipkin:
+    enabled: true
+    name: zipkin
+    image: openzipkin/zipkin
+    port: 9411
+    replicas: 1
+    external: true
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"

@@ -11,3 +11,6 @@ credentials-binding:latest
 matrix-auth:latest
 timestamper:latest
 sonar:latest
+slack:latest
+email-ext:latest
+mailer:latest

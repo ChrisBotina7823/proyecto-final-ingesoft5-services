@@ -46,7 +46,7 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 				.antMatchers("/api/**")
 					.hasAnyRole(RoleBasedAuthority.ROLE_USER.getRole(), 
 							RoleBasedAuthority.ROLE_ADMIN.getRole())
-				.antMatchers("/actuator/health/**", "/actuator/info/**")
+				.antMatchers("/actuator/health/**", "/actuator/info/**", "/actuator/prometheus")
 					.permitAll()
 				.antMatchers("/actuator/**")
 					.hasAnyRole(RoleBasedAuthority.ROLE_ADMIN.getRole())

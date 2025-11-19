@@ -8,3 +8,6 @@
 *.json linguist-language=json
 *.xml linguist-detectable=true
 *.xml linguist-language=xml
+
+*.sh text eol=lf
+**vm_key** eol=lf

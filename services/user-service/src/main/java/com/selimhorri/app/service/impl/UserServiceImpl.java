@@ -13,6 +13,8 @@ import com.selimhorri.app.helper.UserMappingHelper;
 import com.selimhorri.app.repository.UserRepository;
 import com.selimhorri.app.service.UserService;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,6 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 public class UserServiceImpl implements UserService {
 	
 	private final UserRepository userRepository;
+	private final MeterRegistry meterRegistry;
 	
 	@Override
 	public List<UserDto> findAll() {
@@ -45,6 +48,14 @@ public class UserServiceImpl implements UserService {
 	@Override
 	public UserDto save(final UserDto userDto) {
 		log.info("*** UserDto, service; save user *");
+		
+		// Business metric: Track user registration
+		Counter.builder("users_registered_total")
+				.description("Total number of user registrations")
+				.tag("application", "user-service")
+				.register(meterRegistry)
+				.increment();
+		
 		return UserMappingHelper.map(this.userRepository.save(UserMappingHelper.map(userDto)));
 	}
 	
@@ -70,6 +81,14 @@ public class UserServiceImpl implements UserService {
 	@Override
 	public UserDto findByUsername(final String username) {
 		log.info("*** UserDto, service; fetch user with username *");
+		
+		// Business metric: Track user logins
+		Counter.builder("user_logins_total")
+				.description("Total number of user login attempts")
+				.tag("application", "user-service")
+				.register(meterRegistry)
+				.increment();
+		
 		return UserMappingHelper.map(this.userRepository.findByCredentialUsername(username)
 				.orElseThrow(() -> new UserObjectNotFoundException(String.format("User with username: %s not found", username))));
 	}
