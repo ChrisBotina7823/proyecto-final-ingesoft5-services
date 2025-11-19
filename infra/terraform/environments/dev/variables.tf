@@ -85,25 +85,25 @@ variable "kubernetes_version" {
 variable "aks_node_vm_size" {
   description = "AKS node VM size"
   type        = string
-  default     = "Standard_D4s_v3"  # 16GB RAM, 4 vCPU
+  default     = "Standard_B2s"  # 4GB RAM, 2 vCPU
 }
 
 variable "aks_node_count" {
   description = "Initial number of AKS nodes"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "aks_min_node_count" {
   description = "Minimum number of AKS nodes for autoscaling"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "aks_max_node_count" {
   description = "Maximum number of AKS nodes for autoscaling"
   type        = number
-  default     = 1
+  default     = 3
 }
 
 variable "cost_center" {
