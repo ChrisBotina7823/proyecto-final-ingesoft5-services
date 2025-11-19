@@ -24,6 +24,9 @@ import com.selimhorri.app.helper.PaymentMappingHelper;
 import com.selimhorri.app.repository.PaymentRepository;
 import com.selimhorri.app.service.impl.PaymentServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Unit tests for PaymentService
  * Tests payment processing with mocked dependencies
@@ -36,6 +39,9 @@ class PaymentServiceTest {
 
     @Mock
     private RestTemplate restTemplate;
+
+    @Mock
+    private MeterRegistry meterRegistry;
 
     @InjectMocks
     private PaymentServiceImpl paymentService;
@@ -101,6 +107,8 @@ class PaymentServiceTest {
     @Test
     void testSave_ShouldCreateNewPayment() {
         // Given
+        Counter mockCounter = mock(Counter.class);
+        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
         when(paymentRepository.save(any(Payment.class))).thenReturn(testPayment);
 
         // When

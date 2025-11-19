@@ -24,6 +24,10 @@ import com.selimhorri.app.helper.UserMappingHelper;
 import com.selimhorri.app.repository.UserRepository;
 import com.selimhorri.app.service.impl.UserServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * Unit tests for UserService
  * Tests basic CRUD operations with mocked dependencies
@@ -33,6 +37,9 @@ class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private MeterRegistry meterRegistry;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -117,6 +124,8 @@ class UserServiceTest {
     @Test
     void testSave_ShouldCreateNewUser() {
         // Given
+        Counter mockCounter = mock(Counter.class);
+        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
         when(userRepository.save(any(User.class))).thenReturn(testUser);
 
         // When
