@@ -1,24 +1,35 @@
 """
-E-Commerce Microservices - High Concurrency & N+1 Performance Testing
+E-Commerce Microservices - Performance Testing with Business Metrics
 
-FOCUS: Stress testing with high concurrent loads, NOT sequential user flows.
+DUAL FOCUS:
+-----------
+1. HIGH CONCURRENCY: Stress testing with 1000s of concurrent requests (N+1 detection)
+2. BUSINESS METRICS: Complete user flows that generate observable metrics
 
 Testing Strategy:
 -------------------
-1. CRUD operations under extreme load (1000s of concurrent requests)
-2. N+1 problem detection (endpoints with inter-service calls)
-3. Independent requests (no dependencies between tasks)
-4. Simple operations at maximum throughput
+1. N+1 problem detection (endpoints with inter-service calls)
+2. Complete e-commerce flows (user registration → browse → cart → order → payment)
+3. Business metrics activation (orders, payments, users, carts, favourites)
+4. CRUD operations under extreme load
 
 N+1 Problem Endpoints (HIGH PRIORITY):
 ------------------------------------------
-These endpoints call other services for EACH item in a collection:
-
 - GET /order-service/api/carts          → calls UserService N times
 - GET /payment-service/api/payments     → calls OrderService N times (nested: Order→Cart→User)
 - GET /shipping-service/api/shippings   → calls ProductService + OrderService N times
 - GET /favourite-service/api/favourites → calls UserService + ProductService N times
 
+Business Metrics Generated:
+-----------------------------
+- orders_created_total           (Order creation counter)
+- order_value_dollars            (Order value distribution)
+- payments_processed_total       (Payment counter by status)
+- payment_volume_dollars         (Revenue tracking)
+- users_registered_total         (User registration counter)
+- user_logins_total              (Login attempts)
+- carts_deleted_total            (Cart deletion/abandonment)
+- cart_abandonment_rate          (Calculated metric: carts vs orders)
 
 Configuration:
 --------------
@@ -88,6 +99,179 @@ class TestDataGenerator:
 # ============================================================================
 # MAIN USER CLASS - All tasks are independent and concurrent
 # ============================================================================
+
+class BusinessMetricsUser(HttpUser):
+    """
+    User that executes complete e-commerce flows to generate business metrics.
+    
+    Simulates real user behavior:
+    1. Register → Browse products → Add to favourites
+    2. Create cart → Create order → Process payment
+    3. View order history
+    
+    These flows activate ALL business metrics in Grafana.
+    """
+    
+    wait_time = between(1, 3)  # Realistic user think time
+    
+    def on_start(self):
+        """Initialize user session with IDs for flow continuity"""
+        self.user_id = None
+        self.product_id = None
+        self.cart_id = None
+        self.order_id = None
+    
+    @task(10)
+    def complete_purchase_flow(self):
+        """
+        FULL E-COMMERCE FLOW - Generates multiple business metrics:
+        - users_registered_total
+        - orders_created_total
+        - order_value_dollars
+        - payments_processed_total
+        - payment_volume_dollars
+        """
+        # Step 1: Register user
+        user_data = {
+            "firstName": f"Buyer{TestDataGenerator.get_timestamp()}",
+            "lastName": "Test",
+            "email": TestDataGenerator.get_unique_email(),
+            "phone": f"+1{random.randint(2000000000, 2999999999)}",
+            "imageUrl": "https://via.placeholder.com/150"
+        }
+        
+        response = self.client.post("/user-service/api/users", json=user_data, name="[FLOW] Register User")
+        if response.status_code not in [200, 201]:
+            return
+        
+        user = response.json()
+        user_id = user.get('userId')
+        
+        # Step 2: Browse products (get first available)
+        response = self.client.get("/product-service/api/products", name="[FLOW] Browse Products")
+        if response.status_code != 200:
+            return
+        
+        products_data = response.json()
+        products = products_data.get('collection', [])
+        if not products:
+            return
+        
+        product = random.choice(products)
+        product_id = product.get('productId')
+        
+        # Step 3: Create cart
+        cart_data = {"userId": user_id}
+        response = self.client.post("/order-service/api/carts", json=cart_data, name="[FLOW] Create Cart")
+        if response.status_code not in [200, 201]:
+            return
+        
+        cart = response.json()
+        cart_id = cart.get('cartId')
+        
+        # Step 4: Create order (ACTIVATES: orders_created_total, order_value_dollars)
+        order_fee = round(random.uniform(50.0, 500.0), 2)
+        order_data = {
+            "orderDate": TestDataGenerator.get_datetime_formatted(),
+            "orderDesc": f"Load test order - Cart abandonment tracking",
+            "orderFee": order_fee,
+            "cart": {"cartId": cart_id}
+        }
+        
+        response = self.client.post("/order-service/api/orders", json=order_data, name="[FLOW] Create Order")
+        if response.status_code not in [200, 201]:
+            return
+        
+        order = response.json()
+        order_id = order.get('orderId')
+        
+        # Step 5: Create shipping item
+        shipping_data = {
+            "product": {"productId": product_id},
+            "order": {"orderId": order_id}
+        }
+        
+        self.client.post("/shipping-service/api/shippings", json=shipping_data, name="[FLOW] Create Shipping")
+        
+        # Step 6: Process payment (ACTIVATES: payments_processed_total, payment_volume_dollars)
+        # Randomly succeed or fail to test payment metrics
+        payment_status = random.choices(
+            ["ACCEPTED", "REJECTED", "PENDING"],
+            weights=[85, 10, 5],  # 85% success rate
+            k=1
+        )[0]
+        
+        payment_data = {
+            "isPayed": payment_status == "ACCEPTED",
+            "paymentStatus": payment_status,
+            "order": {"orderId": order_id}
+        }
+        
+        self.client.post("/payment-service/api/payments", json=payment_data, name=f"[FLOW] Process Payment ({payment_status})")
+    
+    @task(5)
+    def browse_and_favourite(self):
+        """
+        Browse products and add to favourites.
+        Requires existing user (uses ID 1-10).
+        """
+        # Get random user ID (assumes users 1-10 exist)
+        user_id = random.randint(1, 10)
+        
+        # Browse products
+        response = self.client.get("/product-service/api/products", name="[FLOW] Browse Products")
+        if response.status_code != 200:
+            return
+        
+        products_data = response.json()
+        products = products_data.get('collection', [])
+        if not products:
+            return
+        
+        # Add random product to favourites
+        product = random.choice(products)
+        product_id = product.get('productId')
+        
+        favourite_data = {
+            "likeDate": TestDataGenerator.get_datetime_formatted(),
+            "user": {"userId": user_id},
+            "product": {"productId": product_id}
+        }
+        
+        self.client.post("/favourite-service/api/favourites", json=favourite_data, name="[FLOW] Add Favourite")
+    
+    @task(3)
+    def simulate_cart_abandonment(self):
+        """
+        Create cart but DON'T complete order.
+        This increases cart_abandonment_rate metric.
+        """
+        # Register user
+        user_data = {
+            "firstName": f"Abandoner{TestDataGenerator.get_timestamp()}",
+            "lastName": "Test",
+            "email": TestDataGenerator.get_unique_email(),
+            "phone": f"+1{random.randint(2000000000, 2999999999)}",
+            "imageUrl": "https://via.placeholder.com/150"
+        }
+        
+        response = self.client.post("/user-service/api/users", json=user_data, name="[ABANDON] Register User")
+        if response.status_code not in [200, 201]:
+            return
+        
+        user = response.json()
+        user_id = user.get('userId')
+        
+        # Create cart
+        cart_data = {"userId": user_id}
+        response = self.client.post("/order-service/api/carts", json=cart_data, name="[ABANDON] Create Cart")
+        if response.status_code not in [200, 201]:
+            return
+        
+        # DON'T create order - simulate abandonment
+        # This increases cart count without increasing order count
+        # Result: cart_abandonment_rate goes up
+
 
 class MicroserviceStressUser(HttpUser):
     """
@@ -389,14 +573,27 @@ from locust import events
 def on_test_start(environment, **kwargs):
     """Print test configuration on start"""
     print("=" * 80)
-    print("HIGH CONCURRENCY & N+1 PERFORMANCE TEST")
+    print("PERFORMANCE TEST - N+1 DETECTION + BUSINESS METRICS GENERATION")
     print("=" * 80)
     print(f"Target: {environment.host}")
     print("=" * 80)
-    print("Test Focus:")
-    print("  * N+1 Problem Detection (CartService, PaymentService, ShippingService, FavouriteService)")
-    print("  * High Concurrency Stress Testing")
-    print("  * CRUD Operations Under Load")
+    print("Test Objectives:")
+    print("  1. N+1 Problem Detection (CartService, PaymentService, ShippingService, FavouriteService)")
+    print("  2. Business Metrics Generation (Orders, Payments, Users, Cart Abandonment)")
+    print("  3. High Concurrency Stress Testing")
+    print("  4. CRUD Operations Under Load")
+    print("=" * 80)
+    print("User Classes:")
+    print("  * BusinessMetricsUser    - Complete e-commerce flows (metrics generation)")
+    print("  * MicroserviceStressUser - High-concurrency N+1 detection")
+    print("=" * 80)
+    print("Business Metrics Being Generated:")
+    print("  - orders_created_total")
+    print("  - order_value_dollars")
+    print("  - payments_processed_total (by status)")
+    print("  - payment_volume_dollars")
+    print("  - users_registered_total")
+    print("  - cart_abandonment_rate (carts without orders)")
     print("=" * 80)
     print("CRITICAL: Watch for slow N+1 endpoints in console output")
     print("=" * 80)
@@ -432,6 +629,51 @@ def on_test_stop(environment, **kwargs):
     
     print("=" * 80)
     
+    # Business metrics analysis
+    print("\nBUSINESS METRICS GENERATED:")
+    print("-" * 80)
+    
+    business_endpoints = {
+        "[FLOW] Register User": "users_registered_total",
+        "[FLOW] Create Order": "orders_created_total + order_value_dollars",
+        "[FLOW] Process Payment": "payments_processed_total + payment_volume_dollars",
+        "[ABANDON] Create Cart": "cart_abandonment_rate (increases numerator)",
+        "[FLOW] Add Favourite": "favourites tracking"
+    }
+    
+    total_users = 0
+    total_orders = 0
+    total_payments = 0
+    total_abandoned_carts = 0
+    
+    for endpoint_name, metric in business_endpoints.items():
+        matching_stats = [s for s in environment.stats.entries.values() if endpoint_name in s.name]
+        if matching_stats:
+            stat = matching_stats[0]
+            success_count = stat.num_requests - stat.num_failures
+            print(f"{endpoint_name:35s} | Success: {success_count:5,} | Metric: {metric}")
+            
+            # Track totals for summary
+            if "Register User" in endpoint_name:
+                total_users += success_count
+            elif "Create Order" in endpoint_name:
+                total_orders += success_count
+            elif "Process Payment" in endpoint_name:
+                total_payments += success_count
+            elif "ABANDON" in endpoint_name:
+                total_abandoned_carts += success_count
+    
+    print("-" * 80)
+    print(f"ESTIMATED METRICS IN PROMETHEUS:")
+    print(f"  users_registered_total:    ~{total_users:,} new users")
+    print(f"  orders_created_total:      ~{total_orders:,} new orders")
+    print(f"  payments_processed_total:  ~{total_payments:,} payments")
+    print(f"  Abandoned carts created:   ~{total_abandoned_carts:,} carts without orders")
+    if total_orders + total_abandoned_carts > 0:
+        abandonment_rate = (total_abandoned_carts / (total_orders + total_abandoned_carts)) * 100
+        print(f"  cart_abandonment_rate:     ~{abandonment_rate:.1f}%")
+    print("-" * 80)
+    
     # N+1 specific analysis
     n1_endpoints = [
         "[N+1] GET All Carts",
@@ -453,9 +695,9 @@ def on_test_stop(environment, **kwargs):
             
             # Performance warning
             if stat.avg_response_time > 1000:
-                print(f"  WARNING CRITICAL: Avg response time > 1s - SEVERE N+1 PROBLEM!")
+                print(f"  ⚠️  WARNING CRITICAL: Avg response time > 1s - SEVERE N+1 PROBLEM!")
             elif stat.avg_response_time > 500:
-                print(f"  WARNING: Avg response time > 500ms - N+1 problem detected")
+                print(f"  ⚠️  WARNING: Avg response time > 500ms - N+1 problem detected")
             else:
-                print(f"  OK: Performance acceptable")
+                print(f"  ✅ OK: Performance acceptable")
             print()
