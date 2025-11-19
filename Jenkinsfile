@@ -34,6 +34,8 @@ def calculateSemanticVersion() {
     }
     
     return "${major}.${minor}.${patch}"
+def isProduction() {
+    return env.BRANCH_NAME == 'main'
 }
 
 def createGitTag(version) {
