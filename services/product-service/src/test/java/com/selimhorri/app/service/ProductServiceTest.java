@@ -118,7 +118,7 @@ class ProductServiceTest {
     void testSave_ShouldCreateNewProduct() {
         // Given
         Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
+        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(productRepository.save(any(Product.class))).thenReturn(testProduct);
 
         // When

@@ -125,7 +125,7 @@ class UserServiceTest {
     void testSave_ShouldCreateNewUser() {
         // Given
         Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
+        lenient().when(meterRegistry.counter(any(io.micrometer.core.instrument.Meter.Id.class))).thenReturn(mockCounter);
         when(userRepository.save(any(User.class))).thenReturn(testUser);
 
         // When

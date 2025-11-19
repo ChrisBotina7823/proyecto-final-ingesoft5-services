@@ -113,7 +113,7 @@ class OrderServiceTest {
     void testSave_ShouldCreateNewOrder() {
         // Given
         Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
+        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(orderRepository.save(any(Order.class))).thenReturn(testOrder);
 
         // When

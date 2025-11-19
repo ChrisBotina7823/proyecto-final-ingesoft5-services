@@ -108,7 +108,7 @@ class PaymentServiceTest {
     void testSave_ShouldCreateNewPayment() {
         // Given
         Counter mockCounter = mock(Counter.class);
-        when(meterRegistry.counter(anyString())).thenReturn(mockCounter);
+        when(meterRegistry.counter(any())).thenReturn(mockCounter);
         when(paymentRepository.save(any(Payment.class))).thenReturn(testPayment);
 
         // When
