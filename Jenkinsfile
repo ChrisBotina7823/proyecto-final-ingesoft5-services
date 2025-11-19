@@ -122,7 +122,7 @@ def sendNotification(status, message) {
     }
 }
 
-def deployWithHelm(environment, version) {
+def deployServices(environment, version) {
     def namespace = environment
     def overlayPath = "infra/kubernetes/overlays/${environment}"
     
@@ -247,9 +247,6 @@ pipeline {
         }
         
         stage('Semantic Versioning') {
-            when {
-                expression { isProduction() }
-            }
             steps {
                 script {
                     PREVIOUS_VERSION = sh(
@@ -269,9 +266,6 @@ pipeline {
         }
 
         stage('Build and Test Services') {
-            when {
-                expression { false }
-            }
             steps {
                 script {
                     sh 'chmod +x mvnw'
@@ -282,9 +276,6 @@ pipeline {
         }
         
         stage('Trivy Filesystem Scan') {
-            when {
-                expression { false }
-            }
             steps {
                 script {
                     echo "Running Trivy filesystem vulnerability scan..."
@@ -312,9 +303,6 @@ pipeline {
         }
         
         stage('Code Quality Analysis') {
-            when {
-                expression { false }
-            }
             steps {
                 script {
                     withCredentials([usernamePassword(
@@ -336,13 +324,8 @@ pipeline {
 
         stage('Docker Build & Push') {
             when {
-                expression { false }
-            }
-            /*
-            when {
                 expression { isProduction() || isDevelopment() }
             }
-            */
             steps {
                 script {
                     def services = getAllServices()
@@ -386,13 +369,8 @@ pipeline {
         
         stage('Trivy Image Scan') {
             when {
-                expression { false }
-            }
-            /*
-            when {
                 expression { isProduction() || isDevelopment() }
             }
-            */
             steps {
                 script {
                     def services = getAllServices()
@@ -456,7 +434,7 @@ pipeline {
                             kubectl config view --minify
                         """
                         
-                        deployWithHelm('dev', "dev-${GIT_COMMIT_SHORT}")
+                        deployServices('dev', "dev-${GIT_COMMIT_SHORT}")
                         
                         // Cleanup
                         sh "rm -f /tmp/kubeconfig-dev-${BUILD_NUMBER}"
@@ -566,7 +544,7 @@ pipeline {
                             kubectl cluster-info || echo "Warning: Could not connect to cluster"
                         """
                         
-                        deployWithHelm('prod', VERSION)
+                        deployServices('prod', VERSION)
                         
                         sh "rm -f /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                     }
