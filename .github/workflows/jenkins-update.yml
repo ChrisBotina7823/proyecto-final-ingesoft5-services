@@ -1,0 +1,227 @@
+name: Jenkins Configuration Update
+
+on:
+  push:
+    branches:
+      - main
+      - 'infra/**'
+    paths:
+      - 'infra/jenkins/casc.yaml'
+      - 'infra/jenkins/plugins.txt'
+      - 'infra/jenkins/Dockerfile'
+      - 'infra/jenkins/docker-compose.yml'
+      - '.github/workflows/jenkins-update.yml'
+  workflow_dispatch:
+    inputs:
+      update_kubeconfig:
+        description: 'Also update kubeconfig from AKS'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  update-jenkins:
+    name: Update Jenkins Configuration
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get Jenkins VM IP
+        id: get_jenkins_ip
+        run: |
+          cd infra/terraform/environments/base-infra
+          
+          # Configure Terraform credentials
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+          
+          # Install Terraform
+          wget -q https://releases.hashicorp.com/terraform/1.9.0/terraform_1.9.0_linux_amd64.zip
+          unzip -q terraform_1.9.0_linux_amd64.zip
+          chmod +x terraform
+          
+          # Init with S3 backend
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY }}" \
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
+          ./terraform init
+          
+          JENKINS_IP=$(./terraform output -raw jenkins_vm_public_ip)
+          echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
+          echo "Jenkins VM IP: $JENKINS_IP"
+      
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.JENKINS_VM_PRIVATE_KEY }}" > ~/.ssh/vm_key
+          chmod 600 ~/.ssh/vm_key
+          ssh-keyscan -H ${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }} >> ~/.ssh/known_hosts
+      
+      - name: Create Jenkins .env file
+        run: |
+          cat > infra/jenkins/.env <<EOF
+          GITHUB_TOKEN=${{ secrets.GH_TOKEN }}
+          DOCKER_REGISTRY_USER=${{ secrets.DOCKER_REGISTRY_USER }}
+          DOCKER_REGISTRY_PASS=${{ secrets.DOCKER_REGISTRY_PASS }}
+          AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}
+          KUBECONFIG_DEV_BASE64=${{ secrets.KUBECONFIG_DEV_BASE64 }}
+          KUBECONFIG_PROD_BASE64=${{ secrets.KUBECONFIG_PROD_BASE64 }}
+          JENKINS_ADMIN_USER=${{ secrets.JENKINS_ADMIN_USER }}
+          JENKINS_ADMIN_PASSWORD=${{ secrets.JENKINS_ADMIN_PASSWORD }}
+          SONAR_ADMIN_PASSWORD=${{ secrets.SONAR_ADMIN_PASSWORD }}
+          SONAR_DB_PASSWORD=${{ secrets.SONAR_DB_PASSWORD }}
+          POSTGRES_USER=sonar
+          POSTGRES_PASSWORD=${{ secrets.SONAR_DB_PASSWORD }}
+          SLACK_BOT_TOKEN=${{ secrets.SLACK_BOT_TOKEN }}
+          EOF
+      
+      - name: Get fresh kubeconfig from AKS (if requested)
+        if: ${{ github.event.inputs.update_kubeconfig == 'true' }}
+        run: |
+          # Install Azure CLI
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          
+          # Login to Azure
+          az login --service-principal \
+            -u ${{ secrets.AZURE_CLIENT_ID }} \
+            -p ${{ secrets.AZURE_CLIENT_SECRET }} \
+            --tenant ${{ secrets.AZURE_TENANT_ID }}
+          
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+          # Get dev kubeconfig
+          cd infra/terraform/environments/dev
+          
+          wget -q https://releases.hashicorp.com/terraform/1.9.0/terraform_1.9.0_linux_amd64.zip
+          unzip -q terraform_1.9.0_linux_amd64.zip
+          chmod +x terraform
+          
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+          
+          # Init with S3 backend
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY }}" \
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
+          ./terraform init
+          
+          AKS_DEV=$(./terraform output -raw aks_cluster_name)
+          RG_DEV=$(./terraform output -raw resource_group_name)
+          
+          az aks get-credentials --resource-group $RG_DEV --name $AKS_DEV --file ../../jenkins/kubeconfig-dev --overwrite-existing
+          
+          # Get prod kubeconfig
+          cd ../prod
+          
+          cp ../dev/terraform .
+          cat > terraform.tfvars <<EOF
+          aws_access_key = "${{ secrets.AWS_ACCESS_KEY }}"
+          aws_secret_key = "${{ secrets.AWS_SECRET_KEY }}"
+          subscription_id = "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          client_id = "${{ secrets.AZURE_CLIENT_ID }}"
+          client_secret = "${{ secrets.AZURE_CLIENT_SECRET }}"
+          tenant_id = "${{ secrets.AZURE_TENANT_ID }}"
+          EOF
+          
+          # Init with S3 backend
+          AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY }}" \
+          AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
+          ./terraform init
+          
+          AKS_PROD=$(./terraform output -raw aks_cluster_name)
+          RG_PROD=$(./terraform output -raw resource_group_name)
+          
+          az aks get-credentials --resource-group $RG_PROD --name $AKS_PROD --file ../../jenkins/kubeconfig-prod --overwrite-existing
+          
+          echo "Fresh kubeconfig files generated from AKS"
+      
+      - name: Upload Jenkins files to VM
+        run: |
+          JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
+          
+          # Copy all Jenkins configuration files
+          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/plugins.txt ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/Dockerfile ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/docker-compose.yml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/init-sonar.sh ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          
+          # Copy kubeconfig if updated
+          if [ "${{ github.event.inputs.update_kubeconfig }}" == "true" ]; then
+            scp -i ~/.ssh/vm_key infra/jenkins/kubeconfig-dev ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            scp -i ~/.ssh/vm_key infra/jenkins/kubeconfig-prod ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          fi
+          
+          echo "Jenkins files uploaded to VM"
+      
+      - name: Restart Jenkins containers
+        run: |
+          JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
+          
+          # Check if Dockerfile or docker-compose changed (needs rebuild)
+          if git diff --name-only HEAD~1 HEAD | grep -q "infra/jenkins/Dockerfile\|infra/jenkins/docker-compose.yml\|infra/jenkins/plugins.txt"; then
+            echo "Dockerfile or compose changed, rebuilding..."
+            ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose down && docker compose up -d --build'"
+          else
+            echo "Only configuration changed, restarting..."
+            ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+          fi
+          
+          echo "Jenkins containers restarted"
+      
+      - name: Wait for Jenkins to be ready
+        run: |
+          JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
+          
+          echo "Waiting for Jenkins to be ready..."
+          for i in {1..60}; do
+            if curl -s -o /dev/null -w "%{http_code}" http://$JENKINS_IP:8090/login | grep -q "200"; then
+              echo "Jenkins is ready and healthy!"
+              exit 0
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 10
+          done
+          
+          echo "Jenkins failed to become ready"
+          exit 1
+      
+      - name: Verify CasC reloaded
+        run: |
+          JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
+          
+          # Check Jenkins logs for CasC reload
+          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "sg docker -c 'docker logs jenkins 2>&1 | tail -50 | grep -i \"configuration as code\"'" || true
+          
+          echo "Jenkins Configuration as Code update completed"
+      
+      - name: Summary
+        run: |
+          echo "## Jenkins Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Jenkins VM: ${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}" >> $GITHUB_STEP_SUMMARY
+          echo "- CasC configuration updated" >> $GITHUB_STEP_SUMMARY
+          echo "- Jenkins containers restarted" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event.inputs.update_kubeconfig }}" == "true" ]; then
+            echo "- Kubeconfig files refreshed from AKS" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Access Jenkins: http://${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}:8090" >> $GITHUB_STEP_SUMMARY

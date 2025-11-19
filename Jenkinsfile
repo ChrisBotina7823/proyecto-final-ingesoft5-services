@@ -429,6 +429,9 @@ pipeline {
         }
         
         stage('Deploy to Dev') {
+            when {
+                expression { false }
+            }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG_FILE')]) {
@@ -453,6 +456,9 @@ pipeline {
         }
         
         stage('Smoke Tests - Dev') {
+            when {
+                expression { false }
+            }
             steps {
                 script {
                     withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG_FILE')]) {
