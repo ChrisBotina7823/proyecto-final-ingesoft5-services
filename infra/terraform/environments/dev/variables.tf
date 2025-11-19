@@ -91,19 +91,19 @@ variable "aks_node_vm_size" {
 variable "aks_node_count" {
   description = "Initial number of AKS nodes"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "aks_min_node_count" {
   description = "Minimum number of AKS nodes for autoscaling"
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "aks_max_node_count" {
   description = "Maximum number of AKS nodes for autoscaling"
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "cost_center" {
