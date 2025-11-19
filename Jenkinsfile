@@ -34,6 +34,9 @@ def calculateSemanticVersion() {
     }
     
     return "${major}.${minor}.${patch}"
+}
+
+
 def isProduction() {
     return env.BRANCH_NAME == 'main'
 }
@@ -192,10 +195,6 @@ def deployServices(environment, version) {
         export KUBECONFIG=${env.KUBECONFIG}
         kubectl get pods -n ${namespace}
     """
-}
-
-def isProduction() {
-    return true || env.BRANCH_NAME == 'main'
 }
 
 def isDevelopment() {
@@ -707,8 +706,7 @@ pipeline {
                     }
                 }
             }
-        }  
-      
+        }
     }
     
     post {

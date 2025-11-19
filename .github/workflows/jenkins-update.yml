@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - develop
       - 'infra/**'
     paths:
       - 'infra/jenkins/casc.yaml'
