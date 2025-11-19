@@ -75,12 +75,6 @@ variable "jenkins_vm_size" {
   default     = "m7i-flex.large"
 }
 
-variable "jenkins_admin_password" {
-  description = "Jenkins VM admin password"
-  type        = string
-  sensitive   = true
-}
-
 variable "cost_center" {
   description = "Cost center tag"
   type        = string
