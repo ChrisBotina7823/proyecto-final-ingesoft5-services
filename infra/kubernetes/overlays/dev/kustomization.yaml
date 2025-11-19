@@ -12,22 +12,22 @@ labels:
 
 images:
   - name: ghcr.io/chrisbotina7823/service-discovery
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/cloud-config
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/api-gateway
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/proxy-client
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/user-service
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/product-service
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/favourite-service
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/order-service
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/payment-service
-    newTag: dev-latest
+    newTag: latest
   - name: ghcr.io/chrisbotina7823/shipping-service
-    newTag: dev-latest
+    newTag: latest

@@ -150,7 +150,7 @@ def deployServices(environment, version) {
         """
     }
     
-    if (version != "latest" && version != "dev-latest") {
+    if (version != "latest") {
         sh """
             cd ${overlayPath}
             kustomize edit set image \
@@ -329,7 +329,7 @@ pipeline {
             steps {
                 script {
                     def services = getAllServices()
-                    def imageTag = isProduction() ? VERSION : "dev-${GIT_COMMIT_SHORT}"
+                    def imageTag = VERSION
                     
                     withCredentials([usernamePassword(
                         credentialsId: 'docker-registry',
@@ -353,12 +353,10 @@ pipeline {
                                     docker push ${DOCKER_REGISTRY}/${serviceName}:${imageTag}
                                 """
                                 
-                                if (isProduction()) {
-                                    sh """
-                                        docker tag ${DOCKER_REGISTRY}/${serviceName}:${imageTag} ${DOCKER_REGISTRY}/${serviceName}:latest
-                                        docker push ${DOCKER_REGISTRY}/${serviceName}:latest
-                                    """
-                                }
+                                sh """
+                                    docker tag ${DOCKER_REGISTRY}/${serviceName}:${imageTag} ${DOCKER_REGISTRY}/${serviceName}:latest
+                                    docker push ${DOCKER_REGISTRY}/${serviceName}:latest
+                                """
                             }
                         }
                     }
@@ -374,7 +372,7 @@ pipeline {
             steps {
                 script {
                     def services = getAllServices()
-                    def imageTag = isProduction() ? VERSION : "dev-${GIT_COMMIT_SHORT}"
+                    def imageTag = VERSION
                     def parallelScans = [:]
                     def scanResults = [:]
                     
@@ -434,7 +432,7 @@ pipeline {
                             kubectl config view --minify
                         """
                         
-                        deployServices('dev', "dev-${GIT_COMMIT_SHORT}")
+                        deployServices('dev', 'latest')
                         
                         // Cleanup
                         sh "rm -f /tmp/kubeconfig-dev-${BUILD_NUMBER}"
