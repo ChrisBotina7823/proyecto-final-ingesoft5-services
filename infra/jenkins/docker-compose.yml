@@ -37,13 +37,15 @@ services:
       - cypress_cache:/var/jenkins_home/.cache/Cypress
       - pip_cache:/var/jenkins_home/.cache/pip
       - jenkins-docker-certs:/certs/client:ro
-      - ./kubeconfig.base64:/var/jenkins_home/kubeconfig.base64:ro
+      - ./kubeconfig-dev.base64:/var/jenkins_home/kubeconfig-dev.base64:ro
+      - ./kubeconfig-prod.base64:/var/jenkins_home/kubeconfig-prod.base64:ro
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false -Dhudson.security.csrf.GlobalCrumbIssuerConfiguration.DISABLE_CSRF_PROTECTION=true
       - CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
       - DOCKER_HOST=tcp://docker-dind:2376
       - DOCKER_CERT_PATH=/certs/client
       - DOCKER_TLS_VERIFY=1
+      - DOCKER_API_VERSION=1.43
       - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
       - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-changeme}
@@ -57,6 +59,12 @@ services:
       - SONAR_ADMIN_PASSWORD=${SONAR_ADMIN_PASSWORD:-admin}
       - JENKINS_URL=${JENKINS_URL:-http://localhost:8090}
       - API_GATEWAY_URL=${API_GATEWAY_URL:-http://host.docker.internal:8080}
+      - SLACK_TOKEN=${SLACK_TOKEN}
+      - SLACK_WORKSPACE=${SLACK_WORKSPACE}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

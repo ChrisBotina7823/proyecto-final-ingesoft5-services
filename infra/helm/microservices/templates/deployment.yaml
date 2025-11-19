@@ -1,0 +1,64 @@
+{{- range $key, $service := .Values.services }}
+{{- if $service.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $service.name }}
+  namespace: {{ $.Values.global.namespace }}
+  labels:
+    app: {{ $service.name }}
+    environment: {{ $.Values.global.environment }}
+spec:
+  replicas: {{ $service.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $service.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $service.name }}
+        environment: {{ $.Values.global.environment }}
+    spec:
+      {{- if $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml $.Values.global.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ $service.name }}
+        {{- if $service.external }}
+        image: {{ $service.image }}
+        {{- else }}
+        image: {{ $.Values.global.registry }}/{{ $service.image }}:{{ $.Values.global.imageTag }}
+        {{- end }}
+        imagePullPolicy: {{ $.Values.global.pullPolicy }}
+        ports:
+        - containerPort: {{ $service.port }}
+          protocol: TCP
+        {{- if $service.env }}
+        env:
+        {{- range $envKey, $envValue := $service.env }}
+        - name: {{ $envKey }}
+          value: {{ $envValue | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if $service.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ $service.healthCheck.path }}
+            port: {{ $service.port }}
+          initialDelaySeconds: {{ $service.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ $service.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ $service.healthCheck.timeoutSeconds }}
+        readinessProbe:
+          httpGet:
+            path: {{ $service.healthCheck.path }}
+            port: {{ $service.port }}
+          initialDelaySeconds: {{ $service.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ $service.healthCheck.periodSeconds }}
+          timeoutSeconds: {{ $service.healthCheck.timeoutSeconds }}
+        {{- end }}
+        resources:
+          {{- toYaml $service.resources | nindent 10 }}
+{{- end }}
+{{- end }}

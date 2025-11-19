@@ -1,0 +1,44 @@
+# Unified ServiceMonitor for all microservices
+# Handles 3 path patterns using relabeling:
+# 1. Services with context-path=true: /{service-name}/actuator/prometheus
+# 2. Services with context-path=custom: /app/actuator/prometheus (proxy-client)
+# 3. Services with context-path=false or no label: /actuator/prometheus (api-gateway, service-discovery, cloud-config)
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: microservices-monitor
+  namespace: observability
+  labels:
+    prometheus: enabled
+    release: kube-prometheus-stack  # Important: matches Prometheus selector
+spec:
+  selector:
+    matchLabels:
+      prometheus: enabled  # Select all services with prometheus enabled
+  endpoints:
+  - port: http
+    path: /actuator/prometheus  # Default path (will be overridden by relabeling)
+    interval: 30s
+    scrapeTimeout: 10s
+    relabelings:
+    # Rule 1: For services with context-path=custom (proxy-client), use /app/actuator/prometheus
+    - sourceLabels: [__meta_kubernetes_service_label_context_path]
+      regex: custom
+      targetLabel: __metrics_path__
+      replacement: /app/actuator/prometheus
+      action: replace
+    
+    # Rule 2: For services with context-path=true, use /{service-name}/actuator/prometheus
+    - sourceLabels: [__meta_kubernetes_service_label_context_path, __meta_kubernetes_service_name]
+      separator: ;
+      regex: true;(.+)
+      targetLabel: __metrics_path__
+      replacement: /${1}/actuator/prometheus
+      action: replace
+    
+    # Rule 3: For services with context-path=false or no label, keep default /actuator/prometheus
+    # (no action needed, uses default path)
+  namespaceSelector:
+    matchNames:
+    - prod

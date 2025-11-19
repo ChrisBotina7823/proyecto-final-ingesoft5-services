@@ -1,4 +1,4 @@
-FROM jenkins/jenkins:2.479-jdk17
+FROM jenkins/jenkins:2.479.3-jdk17
 
 # Skip setup wizard
 ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
@@ -43,6 +43,14 @@ ADD https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv
 RUN tar -xzf /tmp/kustomize.tar.gz -C /usr/local/bin && \
 chmod +x /usr/local/bin/kustomize && \
 rm /tmp/kustomize.tar.gz
+
+# Install Helm 3 (for Kubernetes package management)
+RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# Add Helm repositories for observability stack
+RUN helm repo add prometheus-community https://prometheus-community.github.io/helm-charts && \
+    helm repo add grafana https://grafana.github.io/helm-charts && \
+    helm repo update
 
 # Install Azure CLI (separate layer, rarely changes)
 # RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \

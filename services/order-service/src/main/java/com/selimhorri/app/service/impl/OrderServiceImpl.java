@@ -13,6 +13,9 @@ import com.selimhorri.app.helper.OrderMappingHelper;
 import com.selimhorri.app.repository.OrderRepository;
 import com.selimhorri.app.service.OrderService;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,6 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public class OrderServiceImpl implements OrderService {
 	
 	private final OrderRepository orderRepository;
+	private final MeterRegistry meterRegistry;
 	
 	@Override
 	public List<OrderDto> findAll() {
@@ -46,6 +50,23 @@ public class OrderServiceImpl implements OrderService {
 	@Override
 	public OrderDto save(final OrderDto orderDto) {
 		log.info("*** OrderDto, service; save order *");
+		
+		// Business metric: Track order creation
+		Counter.builder("orders_created_total")
+				.description("Total number of orders created")
+				.tag("application", "order-service")
+				.register(meterRegistry)
+				.increment();
+		
+		// Business metric: Track order value distribution
+		if (orderDto.getOrderFee() != null) {
+			DistributionSummary.builder("order_value_dollars")
+					.description("Distribution of order values in dollars")
+					.tag("application", "order-service")
+					.register(meterRegistry)
+					.record(orderDto.getOrderFee());
+		}
+		
 		return OrderMappingHelper.map(this.orderRepository
 				.save(OrderMappingHelper.map(orderDto)));
 	}
