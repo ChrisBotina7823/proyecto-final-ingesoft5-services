@@ -3,9 +3,14 @@
   "version": "1.0.0",
   "description": "E2E tests for e-commerce microservices using Cypress",
   "scripts": {
-    "test": "cypress run"
+    "test": "cypress run",
+    "test:headless": "cypress run --headless --browser electron",
+    "test:report": "cypress run --headless --browser electron --reporter mochawesome --reporter-options reportDir=cypress/reports,overwrite=false,html=true,json=true"
   },
   "devDependencies": {
-    "cypress": "^13.6.0"
+    "cypress": "^13.6.0",
+    "mochawesome": "^7.1.3",
+    "mochawesome-merge": "^4.3.0",
+    "mochawesome-report-generator": "^6.2.0"
   }
 }

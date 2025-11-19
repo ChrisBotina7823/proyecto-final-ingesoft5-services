@@ -15,17 +15,27 @@ module.exports = defineConfig({
     },
     viewportWidth: 1280,
     viewportHeight: 720,
-    video: false,
-    screenshotOnRunFailure: false,
+    video: true, // Enable video for CI
+    screenshotOnRunFailure: true, // Enable screenshots on failure
     defaultCommandTimeout: 10000,
     requestTimeout: 15000,
     responseTimeout: 15000,
     retries: {
-      runMode: 2,
+      runMode: 2, // Retry failed tests in CI
       openMode: 0
     },
     env: {
       apiUrl: 'http://localhost:8080'
     }
+  },
+  // Reporter configuration
+  reporter: 'mochawesome',
+  reporterOptions: {
+    reportDir: 'cypress/reports',
+    overwrite: false,
+    html: true,
+    json: true,
+    timestamp: 'mmddyyyy_HHMMss',
+    reportFilename: '[status]_[datetime]-report'
   }
 })

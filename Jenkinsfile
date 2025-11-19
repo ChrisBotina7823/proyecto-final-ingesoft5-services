@@ -653,43 +653,69 @@ EOF
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
                                 PORT_FORWARD_PID=\$!
                                 
-                                echo "Waiting for port-forward..."
-                                for i in {1..30}; do
+                                echo "Waiting for port-forward to establish..."
+                                sleep 5
+                                
+                                # Wait for API Gateway to be ready (fixed loop syntax)
+                                MAX_ATTEMPTS=30
+                                ATTEMPT=1
+                                while [ \$ATTEMPT -le \$MAX_ATTEMPTS ]; do
                                     if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
-                                        echo "API Gateway is ready"
+                                        echo "✓ API Gateway is ready (attempt \$ATTEMPT/\$MAX_ATTEMPTS)"
                                         break
                                     fi
-                                    echo "Waiting for API Gateway... attempt \$i/30"
+                                    echo "Waiting for API Gateway... attempt \$ATTEMPT/\$MAX_ATTEMPTS"
+                                    ATTEMPT=\$((ATTEMPT + 1))
                                     sleep 2
                                 done
                                 
+                                if ! curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
+                                    echo "⚠ Warning: API Gateway not responding, tests may fail"
+                                fi
+                                
                                 if [ -f "package.json" ]; then
+                                    echo "Installing dependencies..."
                                     npm ci --prefer-offline --no-audit || npm install
                                     
-                                    # Configure Cypress to generate reports
+                                    # Configure Cypress directories
                                     mkdir -p cypress/reports cypress/screenshots cypress/videos
                                     
-                                    # Run Cypress in headless mode with CI environment variables
+                                    echo "Running Cypress E2E tests..."
+                                    
+                                    # Run Cypress with mochawesome reporter
                                     CI=true NO_COLOR=1 CYPRESS_baseUrl=http://localhost:9090 \
                                     npx cypress run \
                                         --headless \
                                         --browser electron \
                                         --reporter mochawesome \
-                                        --reporter-options "reportDir=cypress/reports,overwrite=false,html=true,json=true" \
-                                        --config video=true,screenshotOnRunFailure=true,videosFolder=cypress/videos,screenshotsFolder=cypress/screenshots \
-                                        || echo "Warning: E2E tests had failures"
+                                        --reporter-options "reportDir=cypress/reports,overwrite=false,html=true,json=true,reportFilename=[status]_[datetime]-report" \
+                                        --config video=true,screenshotOnRunFailure=true,videosFolder=cypress/videos,screenshotsFolder=cypress/screenshots
                                     
                                     # Copy reports back to workspace
+                                    echo "Copying E2E test reports..."
                                     mkdir -p ${WORKSPACE}/build-reports/e2e
-                                    cp -r cypress/reports/* ${WORKSPACE}/build-reports/e2e/ || true
-                                    cp -r cypress/screenshots ${WORKSPACE}/build-reports/e2e/ || true
-                                    cp -r cypress/videos ${WORKSPACE}/build-reports/e2e/ || true
+                                    
+                                    if [ -d "cypress/reports" ]; then
+                                        cp -r cypress/reports/* ${WORKSPACE}/build-reports/e2e/ 2>/dev/null || echo "No reports found"
+                                    fi
+                                    
+                                    if [ -d "cypress/screenshots" ]; then
+                                        cp -r cypress/screenshots ${WORKSPACE}/build-reports/e2e/ 2>/dev/null || echo "No screenshots found"
+                                    fi
+                                    
+                                    if [ -d "cypress/videos" ]; then
+                                        cp -r cypress/videos ${WORKSPACE}/build-reports/e2e/ 2>/dev/null || echo "No videos found"
+                                    fi
+                                    
+                                    echo "E2E tests completed"
                                 else
                                     echo "No package.json found, skipping E2E tests"
                                 fi
                                 
-                                kill \$PORT_FORWARD_PID || true
+                                # Kill port-forward
+                                kill \$PORT_FORWARD_PID 2>/dev/null || true
                                 
+                                # Cleanup
                                 cd /tmp
                                 rm -rf e2e-tests-${BUILD_NUMBER}
                             """
@@ -725,20 +751,35 @@ EOF
                                 kubectl port-forward svc/api-gateway 9090:8080 -n prod > /dev/null 2>&1 &
                                 PORT_FORWARD_PID=\$!
                                 
-                                for i in {1..30}; do
+                                echo "Waiting for port-forward to establish..."
+                                sleep 5
+                                
+                                # Wait for API Gateway to be ready
+                                MAX_ATTEMPTS=30
+                                ATTEMPT=1
+                                while [ \$ATTEMPT -le \$MAX_ATTEMPTS ]; do
                                     if curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
-                                        echo "API Gateway is ready"
+                                        echo "✓ API Gateway is ready (attempt \$ATTEMPT/\$MAX_ATTEMPTS)"
                                         break
                                     fi
-                                    echo "Waiting... attempt \$i/30"
+                                    echo "Waiting for API Gateway... attempt \$ATTEMPT/\$MAX_ATTEMPTS"
+                                    ATTEMPT=\$((ATTEMPT + 1))
                                     sleep 2
                                 done
                                 
+                                if ! curl -s http://localhost:9090/actuator/health > /dev/null 2>&1; then
+                                    echo "⚠ Warning: API Gateway not responding, tests may fail"
+                                fi
+                                
                                 if [ -f "requirements.txt" ]; then
+                                    echo "Installing Locust dependencies..."
                                     mkdir -p reports
                                     
                                     if [ -d "/opt/locust-venv" ]; then
+                                        echo "Using virtual environment at /opt/locust-venv"
                                         /opt/locust-venv/bin/pip install -r requirements.txt --quiet || pip install -r requirements.txt --quiet
+                                        
+                                        echo "Running Locust performance tests..."
                                         /opt/locust-venv/bin/locust \
                                             --headless \
                                             --host=http://localhost:9090 \
@@ -748,9 +789,12 @@ EOF
                                             --loglevel WARNING \
                                             --html reports/locust-report.html \
                                             --csv reports/locust-stats \
-                                            --autostart || echo "Warning: Performance tests had issues"
+                                            --autostart
                                     else
+                                        echo "Virtual environment not found, using system Python"
                                         pip install -r requirements.txt --quiet || true
+                                        
+                                        echo "Running Locust performance tests..."
                                         locust \
                                             --headless \
                                             --host=http://localhost:9090 \
@@ -760,17 +804,24 @@ EOF
                                             --loglevel WARNING \
                                             --html reports/locust-report.html \
                                             --csv reports/locust-stats \
-                                            --autostart || echo "Warning: Performance tests had issues"
+                                            --autostart || echo "⚠ Warning: Performance tests had issues"
                                     fi
                                     
                                     # Copy performance reports back to workspace
+                                    echo "Copying performance test reports..."
                                     mkdir -p ${WORKSPACE}/build-reports/performance
-                                    cp -r reports/* ${WORKSPACE}/build-reports/performance/ || true
+                                    
+                                    if [ -d "reports" ]; then
+                                        cp -r reports/* ${WORKSPACE}/build-reports/performance/ 2>/dev/null || echo "No reports found"
+                                    fi
+                                    
+                                    echo "Performance tests completed"
                                 else
                                     echo "No requirements.txt found, skipping performance tests"
                                 fi
                                 
-                                kill \$PORT_FORWARD_PID || true
+                                # Kill port-forward
+                                kill \$PORT_FORWARD_PID 2>/dev/null || true
                             """
                         }
                         
