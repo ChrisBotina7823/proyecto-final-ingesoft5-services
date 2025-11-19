@@ -14,5 +14,3 @@ resources:
   - order-service.yaml
   - payment-service.yaml
   - shipping-service.yaml
-  - loki-datasource.yaml
-  - servicemonitor.yaml
