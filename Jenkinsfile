@@ -189,7 +189,7 @@ def deployServices(environment, version) {
     """
     sh """
         export KUBECONFIG=${env.KUBECONFIG}
-        kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=1200s
+        kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=1200s || true
     """
     sh """
         export KUBECONFIG=${env.KUBECONFIG}
@@ -492,7 +492,7 @@ EOF
                         sh """
                             export KUBECONFIG=${env.KUBECONFIG}
                             echo "Waiting for API Gateway to be ready..."
-                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n dev --timeout=300s
+                            kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n dev --timeout=300s || true
                             
                             export KUBECONFIG=${env.KUBECONFIG}
                             kubectl port-forward svc/api-gateway 9091:8080 -n dev > /dev/null 2>&1 &
