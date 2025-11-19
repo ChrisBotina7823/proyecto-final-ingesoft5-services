@@ -13,6 +13,7 @@ terraform {
     }
   }
 
+
   # S3 backend for Prod state management (supports both AWS and Azure resources)
   backend "s3" {
     bucket         = "chrisb-tfstate-ecommerce"

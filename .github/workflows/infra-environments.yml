@@ -143,14 +143,13 @@ jobs:
       - name: Get AKS credentials and generate kubeconfig
         id: get_kubeconfig
         run: |
-          # Always use PROD cluster credentials
-          az aks get-credentials --resource-group rg-prod-ecommerce --name aks-prod-ecommerce --file ./kubeconfig-dev --overwrite-existing
+          az aks get-credentials --resource-group rg-dev-ecommerce --name aks-dev-ecommerce --file ./kubeconfig-dev --overwrite-existing
           
           # Convert to base64 for secret storage
           KUBECONFIG_BASE64=$(cat ./kubeconfig-dev | base64 -w 0)
           echo "kubeconfig=$KUBECONFIG_BASE64" >> $GITHUB_OUTPUT
           
-          echo "Dev kubeconfig generated from PROD cluster"
+          echo "Dev kubeconfig generated from dev cluster"
       
       - name: Verify AKS cluster
         run: |

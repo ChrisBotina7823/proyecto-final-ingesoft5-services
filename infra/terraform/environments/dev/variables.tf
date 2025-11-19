@@ -85,7 +85,7 @@ variable "kubernetes_version" {
 variable "aks_node_vm_size" {
   description = "AKS node VM size"
   type        = string
-  default     = "Standard_D4s_v3"  # 16GB RAM, 4 vCPU
+  default     = "Standard_B2s"  # 4GB RAM, 2 vCPU
 }
 
 variable "aks_node_count" {
