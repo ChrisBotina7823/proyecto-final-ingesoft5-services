@@ -127,8 +127,12 @@ def deployWithHelm(environment, version) {
     def overlayPath = "infra/kubernetes/overlays/${environment}"
     
     echo "Deploying to ${environment} with version ${version}"
+    echo "KUBECONFIG is set to: ${env.KUBECONFIG}"
     
-    sh "kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -"
+    sh """
+        export KUBECONFIG=${env.KUBECONFIG}
+        kubectl create namespace ${namespace} --dry-run=client -o yaml | kubectl apply -f -
+    """
     
     withCredentials([usernamePassword(
         credentialsId: 'docker-registry',
@@ -136,6 +140,7 @@ def deployWithHelm(environment, version) {
         passwordVariable: 'DOCKER_PASS'
     )]) {
         sh """
+            export KUBECONFIG=${env.KUBECONFIG}
             kubectl create secret docker-registry ghcr-secret \
                 --docker-server=ghcr.io \
                 --docker-username=\${DOCKER_USER} \
@@ -163,9 +168,18 @@ def deployWithHelm(environment, version) {
         """
     }
     
-    sh "kubectl apply -k ${overlayPath} --force"
-    sh "kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=600s || true"
-    sh "kubectl get pods -n ${namespace}"
+    sh """
+        export KUBECONFIG=${env.KUBECONFIG}
+        kubectl apply -k ${overlayPath} --force
+    """
+    sh """
+        export KUBECONFIG=${env.KUBECONFIG}
+        kubectl wait --for=condition=ready pod --all -n ${namespace} --timeout=600s || true
+    """
+    sh """
+        export KUBECONFIG=${env.KUBECONFIG}
+        kubectl get pods -n ${namespace}
+    """
 }
 
 def isProduction() {
@@ -431,8 +445,21 @@ pipeline {
         stage('Deploy to Dev') {
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG_FILE')]) {
+                        sh "cp \${KUBECONFIG_FILE} /tmp/kubeconfig-dev-${BUILD_NUMBER}"
+                        env.KUBECONFIG = "/tmp/kubeconfig-dev-${BUILD_NUMBER}"
+                        
+                        // Verify kubeconfig works
+                        sh """
+                            export KUBECONFIG=/tmp/kubeconfig-dev-${BUILD_NUMBER}
+                            kubectl cluster-info || echo "Warning: Could not connect to cluster"
+                            kubectl config view --minify
+                        """
+                        
                         deployWithHelm('dev', "dev-${GIT_COMMIT_SHORT}")
+                        
+                        // Cleanup
+                        sh "rm -f /tmp/kubeconfig-dev-${BUILD_NUMBER}"
                     }
                     sendNotification('SUCCESS', "Successfully deployed to Development environment")
                 }
@@ -442,11 +469,13 @@ pipeline {
         stage('Smoke Tests - Dev') {
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-dev', variable: 'KUBECONFIG_FILE')]) {
                         sh """
+                            export KUBECONFIG=${env.KUBECONFIG}
                             echo "Waiting for API Gateway to be ready..."
                             kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n dev --timeout=300s || true
                             
+                            export KUBECONFIG=${env.KUBECONFIG}
                             kubectl port-forward svc/api-gateway 9091:8080 -n dev > /dev/null 2>&1 &
                             PORT_FORWARD_PID=\$!
                             
@@ -536,8 +565,18 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG_FILE')]) {
+                        sh "cp \${KUBECONFIG_FILE} /tmp/kubeconfig-prod-${BUILD_NUMBER}"
+                        env.KUBECONFIG = "/tmp/kubeconfig-prod-${BUILD_NUMBER}"
+                        
+                        sh """
+                            export KUBECONFIG=/tmp/kubeconfig-prod-${BUILD_NUMBER}
+                            kubectl cluster-info || echo "Warning: Could not connect to cluster"
+                        """
+                        
                         deployWithHelm('prod', VERSION)
+                        
+                        sh "rm -f /tmp/kubeconfig-prod-${BUILD_NUMBER}"
                     }
                     
                     createGitTag(VERSION)
@@ -553,7 +592,8 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG_FILE')]) {
+                        env.KUBECONFIG = "/tmp/kubeconfig-prod-${BUILD_NUMBER}"
                         def e2eTestsExist = fileExists('tests/e2e')
                         
                         if (!e2eTestsExist) {
@@ -568,6 +608,7 @@ pipeline {
                         
                         dir("/tmp/e2e-tests-${BUILD_NUMBER}") {
                             sh """
+                                export KUBECONFIG=${env.KUBECONFIG}
                                 echo "Waiting for API Gateway to be ready..."
                                 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s || true
                                 
@@ -609,7 +650,8 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG_FILE')]) {
+                        env.KUBECONFIG = "/tmp/kubeconfig-prod-${BUILD_NUMBER}"
                         def perfTestsExist = fileExists('tests/performance')
                         
                         if (!perfTestsExist) {
@@ -619,6 +661,7 @@ pipeline {
                         
                         dir('tests/performance') {
                             sh """
+                                export KUBECONFIG=${env.KUBECONFIG}
                                 echo "Waiting for API Gateway..."
                                 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=api-gateway -n prod --timeout=300s || true
                                 
