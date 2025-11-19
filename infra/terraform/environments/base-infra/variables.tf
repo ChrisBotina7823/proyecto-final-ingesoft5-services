@@ -65,7 +65,7 @@ variable "azure_location" {
 variable "ssh_public_key_path" {
   description = "Path to SSH public key file"
   type        = string
-  default     = "~/.ssh/id_rsa.pub"
+  default     = "../../../credentials/vm_key.pub"
 }
 
 # Jenkins VM configuration
@@ -73,12 +73,6 @@ variable "jenkins_vm_size" {
   description = "Jenkins VM instance type"
   type        = string
   default     = "m7i-flex.large"
-}
-
-variable "jenkins_admin_password" {
-  description = "Jenkins VM admin password"
-  type        = string
-  sensitive   = true
 }
 
 variable "cost_center" {

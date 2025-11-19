@@ -24,17 +24,23 @@ import com.selimhorri.app.helper.UserMappingHelper;
 import com.selimhorri.app.repository.UserRepository;
 import com.selimhorri.app.service.impl.UserServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * Unit tests for UserService
  * Tests basic CRUD operations with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class UserServiceTest {
 
     @Mock
     private UserRepository userRepository;
 
-    @InjectMocks
+    private MeterRegistry meterRegistry;
+
     private UserServiceImpl userService;
 
     private User testUser;
@@ -42,6 +48,9 @@ class UserServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
+        userService = new UserServiceImpl(userRepository, meterRegistry);
+        
         Credential testCredential = Credential.builder()
                 .credentialId(1)
                 .username("johndoe")
@@ -126,6 +135,9 @@ class UserServiceTest {
         assertNotNull(result);
         assertEquals("John", result.getFirstName());
         verify(userRepository, times(1)).save(any(User.class));
+        
+        // Verify metric was registered
+        assertNotNull(meterRegistry.find("users_registered_total").counter());
     }
 
     @Test

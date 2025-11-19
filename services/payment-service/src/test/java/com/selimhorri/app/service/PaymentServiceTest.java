@@ -24,11 +24,15 @@ import com.selimhorri.app.helper.PaymentMappingHelper;
 import com.selimhorri.app.repository.PaymentRepository;
 import com.selimhorri.app.service.impl.PaymentServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Unit tests for PaymentService
  * Tests payment processing with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class PaymentServiceTest {
 
     @Mock
@@ -37,7 +41,8 @@ class PaymentServiceTest {
     @Mock
     private RestTemplate restTemplate;
 
-    @InjectMocks
+    private MeterRegistry meterRegistry;
+
     private PaymentServiceImpl paymentService;
 
     private Payment testPayment;
@@ -46,6 +51,8 @@ class PaymentServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        paymentService = new PaymentServiceImpl(paymentRepository, restTemplate, meterRegistry);
         testOrderDto = OrderDto.builder()
                 .orderId(100)
                 .orderDesc("Test order")

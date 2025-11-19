@@ -98,6 +98,13 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: eu-west-2
       
       - name: Azure Login
         uses: azure/login@v1
@@ -172,7 +179,14 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
-      
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: eu-west-2
+
       - name: Azure Login
         uses: azure/login@v1
         with:
@@ -234,6 +248,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: eu-west-2
       
       - name: Get Jenkins VM IP from base-infra
         id: get_jenkins_ip
@@ -260,7 +281,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
           ./terraform init
           
-          JENKINS_IP=$(./terraform output -raw jenkins_vm_public_ip)
+          JENKINS_IP=$(./terraform output -raw jenkins_public_ip)
           echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
       
       - name: Setup SSH key
@@ -277,19 +298,19 @@ jobs:
           # Update dev kubeconfig if available
           if [ "${{ needs.terraform-dev.result }}" == "success" ]; then
             echo "${{ needs.terraform-dev.outputs.kubeconfig }}" | base64 -d > kubeconfig-dev
-            scp -i ~/.ssh/vm_key kubeconfig-dev ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            scp -i ~/.ssh/vm_key kubeconfig-dev ubuntu@$JENKINS_IP:/opt/jenkins/
             echo "Dev kubeconfig updated on Jenkins VM"
           fi
           
           # Update prod kubeconfig if available
           if [ "${{ needs.terraform-prod.result }}" == "success" ]; then
             echo "${{ needs.terraform-prod.outputs.kubeconfig }}" | base64 -d > kubeconfig-prod
-            scp -i ~/.ssh/vm_key kubeconfig-prod ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            scp -i ~/.ssh/vm_key kubeconfig-prod ubuntu@$JENKINS_IP:/opt/jenkins/
             echo "Prod kubeconfig updated on Jenkins VM"
           fi
           
           # Restart Jenkins to reload credentials
-          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /opt/jenkins && sg docker -c 'docker compose restart jenkins'"
           
           echo "Jenkins restarted with new kubeconfig files"
       

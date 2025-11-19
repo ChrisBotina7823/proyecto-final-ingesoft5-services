@@ -284,6 +284,37 @@ pipeline {
                     sh './mvnw clean verify -Dmaven.repo.local=/var/jenkins_home/.m2'
                 }   
             }
+            post {
+                always {
+                    script {
+                        echo "Archiving test reports..."
+                        
+                        // Archive Surefire reports (unit tests)
+                        archiveArtifacts artifacts: '**/target/surefire-reports/**/*.xml', 
+                                        allowEmptyArchive: true,
+                                        fingerprint: true
+                        
+                        archiveArtifacts artifacts: '**/target/surefire-reports/**/*.txt', 
+                                        allowEmptyArchive: true,
+                                        fingerprint: true
+                        
+                        // Archive Failsafe reports (integration tests)
+                        archiveArtifacts artifacts: '**/target/failsafe-reports/**/*.xml', 
+                                        allowEmptyArchive: true,
+                                        fingerprint: true
+                        
+                        archiveArtifacts artifacts: '**/target/failsafe-reports/**/*.txt', 
+                                        allowEmptyArchive: true,
+                                        fingerprint: true
+                        
+                        // Publish JUnit test results for visualization
+                        junit testResults: '**/target/surefire-reports/*.xml, **/target/failsafe-reports/*.xml',
+                              allowEmptyResults: true,
+                              skipPublishingChecks: false,
+                              skipMarkingBuildUnstable: false
+                    }
+                }
+            }
         }
         
         stage('Trivy Filesystem Scan') {
@@ -327,6 +358,28 @@ pipeline {
                                 -Dsonar.login=\${SONAR_LOGIN} \
                                 -Dsonar.password=\${SONAR_PASSWORD} \
                                 -Dsonar.projectVersion=${VERSION ?: GIT_COMMIT_SHORT}
+                        """
+                        
+                        // Create a summary report with SonarQube URL
+                        sh """
+                            mkdir -p build-reports
+                            cat > build-reports/sonarqube-analysis.txt << 'EOF'
+==============================================
+SONARQUBE CODE QUALITY ANALYSIS
+==============================================
+Project Key: ecommerce-microservices
+Version: ${VERSION ?: GIT_COMMIT_SHORT}
+SonarQube URL: http://sonarqube:9000/dashboard?id=ecommerce-microservices
+Analysis Time: \$(date)
+Branch: ${env.BRANCH_NAME}
+==============================================
+
+View detailed analysis results at:
+http://sonarqube:9000/dashboard?id=ecommerce-microservices
+
+Report Task Details:
+EOF
+                            cat .scannerwork/report-task.txt >> build-reports/sonarqube-analysis.txt 2>/dev/null || echo "Report task not available" >> build-reports/sonarqube-analysis.txt
                         """
                     }
                 }
@@ -616,8 +669,21 @@ pipeline {
                                 
                                 if [ -f "package.json" ]; then
                                     npm ci --prefer-offline --no-audit || npm install
+                                    
+                                    # Configure Cypress to generate reports
+                                    mkdir -p cypress/reports cypress/screenshots cypress/videos
+                                    
                                     NO_COLOR=1 CYPRESS_baseUrl=http://localhost:9090 npx cypress run \
-                                        --config video=false,screenshotOnRunFailure=false || echo "Warning: E2E tests had failures"
+                                        --reporter mochawesome \
+                                        --reporter-options "reportDir=cypress/reports,overwrite=false,html=true,json=true" \
+                                        --config video=true,screenshotOnRunFailure=true,videosFolder=cypress/videos,screenshotsFolder=cypress/screenshots \
+                                        || echo "Warning: E2E tests had failures"
+                                    
+                                    # Copy reports back to workspace
+                                    mkdir -p ${WORKSPACE}/build-reports/e2e
+                                    cp -r cypress/reports/* ${WORKSPACE}/build-reports/e2e/ || true
+                                    cp -r cypress/screenshots ${WORKSPACE}/build-reports/e2e/ || true
+                                    cp -r cypress/videos ${WORKSPACE}/build-reports/e2e/ || true
                                 else
                                     echo "No package.json found, skipping E2E tests"
                                 fi
@@ -673,6 +739,8 @@ pipeline {
                                 done
                                 
                                 if [ -f "requirements.txt" ]; then
+                                    mkdir -p reports
+                                    
                                     if [ -d "/opt/locust-venv" ]; then
                                         /opt/locust-venv/bin/pip install -r requirements.txt --quiet || pip install -r requirements.txt --quiet
                                         /opt/locust-venv/bin/locust \
@@ -682,6 +750,8 @@ pipeline {
                                             --spawn-rate 2 \
                                             --run-time 30s \
                                             --loglevel WARNING \
+                                            --html reports/locust-report.html \
+                                            --csv reports/locust-stats \
                                             --autostart || echo "Warning: Performance tests had issues"
                                     else
                                         pip install -r requirements.txt --quiet || true
@@ -692,8 +762,14 @@ pipeline {
                                             --spawn-rate 2 \
                                             --run-time 30s \
                                             --loglevel WARNING \
+                                            --html reports/locust-report.html \
+                                            --csv reports/locust-stats \
                                             --autostart || echo "Warning: Performance tests had issues"
                                     fi
+                                    
+                                    # Copy performance reports back to workspace
+                                    mkdir -p ${WORKSPACE}/build-reports/performance
+                                    cp -r reports/* ${WORKSPACE}/build-reports/performance/ || true
                                 else
                                     echo "No requirements.txt found, skipping performance tests"
                                 fi
@@ -710,6 +786,125 @@ pipeline {
     }
     
     post {
+        always {
+            script {
+                echo "=========================================="
+                echo "Archiving ALL reports and artifacts..."
+                echo "=========================================="
+                
+                // 1. Test Reports (already configured in Build & Test stage)
+                archiveArtifacts artifacts: '**/target/surefire-reports/**/*', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                archiveArtifacts artifacts: '**/target/failsafe-reports/**/*', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // 2. Trivy Security Scan Reports
+                archiveArtifacts artifacts: 'trivy-*.json', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // 3. Maven Build Logs
+                archiveArtifacts artifacts: '**/target/*.log', 
+                                allowEmptyArchive: true
+                
+                // 4. JaCoCo Coverage Reports (if generated)
+                archiveArtifacts artifacts: '**/target/site/jacoco/**/*', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // 5. Maven Site Reports
+                archiveArtifacts artifacts: '**/target/site/**/*', 
+                                allowEmptyArchive: true
+                
+                // 6. Checkstyle Reports (if configured)
+                archiveArtifacts artifacts: '**/target/checkstyle-*.xml', 
+                                allowEmptyArchive: true
+                
+                // 7. SpotBugs Reports (if configured)
+                archiveArtifacts artifacts: '**/target/spotbugsXml.xml', 
+                                allowEmptyArchive: true
+                
+                // 8. PMD Reports (if configured)
+                archiveArtifacts artifacts: '**/target/pmd.xml', 
+                                allowEmptyArchive: true
+                
+                // 9. Cypress E2E Test Reports (from build-reports)
+                archiveArtifacts artifacts: 'build-reports/e2e/**/*', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // 10. Locust Performance Test Reports (from build-reports)
+                archiveArtifacts artifacts: 'build-reports/performance/**/*', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // 11. SonarQube Analysis Summary
+                archiveArtifacts artifacts: 'build-reports/sonarqube-analysis.txt', 
+                                allowEmptyArchive: true
+                
+                // 12. Docker Build Context
+                archiveArtifacts artifacts: '**/Dockerfile', 
+                                allowEmptyArchive: true
+                
+                // 13. Kubernetes Manifests Used
+                archiveArtifacts artifacts: 'infra/kubernetes/**/*.yaml', 
+                                allowEmptyArchive: true
+                
+                // 14. SonarQube Analysis Metadata (scanner work)
+                archiveArtifacts artifacts: '.scannerwork/report-task.txt', 
+                                allowEmptyArchive: true
+                
+                // 15. Dependency Check Reports (if configured)
+                archiveArtifacts artifacts: '**/target/dependency-check-report.html', 
+                                allowEmptyArchive: true
+                
+                // 16. Maven Dependency Tree
+                sh 'mkdir -p build-reports || true'
+                sh './mvnw dependency:tree -DoutputFile=build-reports/dependency-tree.txt -Dmaven.repo.local=/var/jenkins_home/.m2 || true'
+                archiveArtifacts artifacts: 'build-reports/dependency-tree.txt', 
+                                allowEmptyArchive: true
+                
+                // 17. Complete build-reports directory
+                archiveArtifacts artifacts: 'build-reports/**/*', 
+                                allowEmptyArchive: true,
+                                fingerprint: true
+                
+                // 18. Build Info Summary
+                sh """
+                    mkdir -p build-reports || true
+                    cat > build-reports/build-info.txt << 'EOF'
+==============================================
+BUILD INFORMATION SUMMARY
+==============================================
+Build Number: ${env.BUILD_NUMBER}
+Build ID: ${env.BUILD_ID}
+Build URL: ${env.BUILD_URL}
+Job Name: ${env.JOB_NAME}
+Branch: ${env.BRANCH_NAME}
+Git Commit: ${env.GIT_COMMIT}
+Git Commit Short: ${GIT_COMMIT_SHORT}
+Version: ${VERSION ?: 'N/A'}
+Previous Version: ${PREVIOUS_VERSION ?: 'N/A'}
+Environment: ${ENVIRONMENT}
+Build User: ${env.BUILD_USER ?: 'System'}
+Build Timestamp: \$(date)
+Workspace: ${env.WORKSPACE}
+Node Name: ${env.NODE_NAME}
+==============================================
+EOF
+                """
+                archiveArtifacts artifacts: 'build-reports/build-info.txt', 
+                                allowEmptyArchive: true
+                
+                echo "=========================================="
+                echo "All reports archived successfully!"
+                echo "=========================================="
+            }
+        }
+        
         success {
             script {
                 if (isProduction()) {

@@ -24,17 +24,22 @@ import com.selimhorri.app.helper.OrderMappingHelper;
 import com.selimhorri.app.repository.OrderRepository;
 import com.selimhorri.app.service.impl.OrderServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Unit tests for OrderService
  * Tests order management with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
 
-    @InjectMocks
+    private MeterRegistry meterRegistry;
+
     private OrderServiceImpl orderService;
 
     private Order testOrder;
@@ -44,6 +49,8 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        orderService = new OrderServiceImpl(orderRepository, meterRegistry);
         testCart = Cart.builder()
                 .cartId(1)
                 .userId(100)

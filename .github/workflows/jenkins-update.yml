@@ -28,6 +28,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: eu-west-2
       
       - name: Get Jenkins VM IP
         id: get_jenkins_ip
@@ -54,7 +61,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_KEY }}" \
           ./terraform init
           
-          JENKINS_IP=$(./terraform output -raw jenkins_vm_public_ip)
+          JENKINS_IP=$(./terraform output -raw jenkins_public_ip)
           echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
           echo "Jenkins VM IP: $JENKINS_IP"
       
@@ -156,17 +163,17 @@ jobs:
           JENKINS_IP="${{ steps.get_jenkins_ip.outputs.jenkins_vm_ip }}"
           
           # Copy all Jenkins configuration files
-          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/plugins.txt ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/Dockerfile ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/docker-compose.yml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/init-sonar.sh ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/plugins.txt ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/Dockerfile ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/docker-compose.yml ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/init-sonar.sh ubuntu@$JENKINS_IP:/opt/jenkins/
           
           # Copy kubeconfig if updated
           if [ "${{ github.event.inputs.update_kubeconfig }}" == "true" ]; then
-            scp -i ~/.ssh/vm_key infra/jenkins/kubeconfig-dev ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-            scp -i ~/.ssh/vm_key infra/jenkins/kubeconfig-prod ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+            scp -i ~/.ssh/vm_key infra/jenkins/kubeconfig-dev ubuntu@$JENKINS_IP:/opt/jenkins/
+            scp -i ~/.ssh/vm_key infra/jenkins/kubeconfig-prod ubuntu@$JENKINS_IP:/opt/jenkins/
           fi
           
           echo "Jenkins files uploaded to VM"
@@ -178,10 +185,10 @@ jobs:
           # Check if Dockerfile or docker-compose changed (needs rebuild)
           if git diff --name-only HEAD~1 HEAD | grep -q "infra/jenkins/Dockerfile\|infra/jenkins/docker-compose.yml\|infra/jenkins/plugins.txt"; then
             echo "Dockerfile or compose changed, rebuilding..."
-            ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose down && docker compose up -d --build'"
+            ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /opt/jenkins && sg docker -c 'docker compose down && docker compose up -d --build'"
           else
             echo "Only configuration changed, restarting..."
-            ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+            ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /opt/jenkins && sg docker -c 'docker compose restart jenkins'"
           fi
           
           echo "Jenkins containers restarted"

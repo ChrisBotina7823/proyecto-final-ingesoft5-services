@@ -24,11 +24,15 @@ import com.selimhorri.app.repository.ProductRepository;
 import com.selimhorri.app.repository.CategoryRepository;
 import com.selimhorri.app.service.impl.ProductServiceImpl;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * Unit tests for ProductService
  * Tests product CRUD operations with mocked dependencies
  */
 @ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 class ProductServiceTest {
 
     @Mock
@@ -37,7 +41,8 @@ class ProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
-    @InjectMocks
+    private MeterRegistry meterRegistry;
+
     private ProductServiceImpl productService;
 
     private Product testProduct;
@@ -47,6 +52,8 @@ class ProductServiceTest {
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+        productService = new ProductServiceImpl(productRepository, meterRegistry);
         testCategory = Category.builder()
                 .categoryId(1)
                 .categoryTitle("Electronics")
