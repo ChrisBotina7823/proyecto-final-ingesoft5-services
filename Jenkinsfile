@@ -669,7 +669,11 @@ EOF
                                     # Configure Cypress to generate reports
                                     mkdir -p cypress/reports cypress/screenshots cypress/videos
                                     
-                                    NO_COLOR=1 CYPRESS_baseUrl=http://localhost:9090 npx cypress run \
+                                    # Run Cypress in headless mode with CI environment variables
+                                    CI=true NO_COLOR=1 CYPRESS_baseUrl=http://localhost:9090 \
+                                    npx cypress run \
+                                        --headless \
+                                        --browser electron \
                                         --reporter mochawesome \
                                         --reporter-options "reportDir=cypress/reports,overwrite=false,html=true,json=true" \
                                         --config video=true,screenshotOnRunFailure=true,videosFolder=cypress/videos,screenshotsFolder=cypress/screenshots \
