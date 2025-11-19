@@ -78,7 +78,7 @@ jobs:
       - name: Get Terraform Outputs
         id: terraform_output
         run: |
-          JENKINS_IP=$(terraform output -raw jenkins_vm_public_ip)
+          JENKINS_IP=$(terraform output -raw jenkins_public_ip)
           echo "jenkins_vm_ip=$JENKINS_IP" >> $GITHUB_OUTPUT
           echo "Jenkins VM IP: $JENKINS_IP"
       
@@ -162,7 +162,7 @@ jobs:
                     ansible_ssh_private_key_file: ~/.ssh/vm_key
                     ansible_python_interpreter: /usr/bin/python3
                     jenkins_source_path: ../../jenkins
-                    jenkins_deploy_path: /home/ubuntu/jenkins
+                    jenkins_deploy_path: /opt/jenkins
           EOF
       
       - name: Run Ansible Playbook
@@ -230,11 +230,11 @@ jobs:
           JENKINS_IP="${{ needs.terraform-base-infra.outputs.jenkins_vm_ip }}"
           
           # Copy updated files to Jenkins VM
-          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
-          scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/home/ubuntu/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/casc.yaml ubuntu@$JENKINS_IP:/opt/jenkins/
+          scp -i ~/.ssh/vm_key -r infra/jenkins/.env ubuntu@$JENKINS_IP:/opt/jenkins/
           
           # Restart Jenkins container to reload CasC
-          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /home/ubuntu/jenkins && sg docker -c 'docker compose restart jenkins'"
+          ssh -i ~/.ssh/vm_key ubuntu@$JENKINS_IP "cd /opt/jenkins && sg docker -c 'docker compose restart jenkins'"
           
           echo "✅ Jenkins CasC configuration updated"
       
