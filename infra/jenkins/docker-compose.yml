@@ -45,6 +45,7 @@ services:
       - DOCKER_HOST=tcp://docker-dind:2376
       - DOCKER_CERT_PATH=/certs/client
       - DOCKER_TLS_VERIFY=1
+      - DOCKER_API_VERSION=1.43
       - JENKINS_ADMIN_USER=${JENKINS_ADMIN_USER:-admin}
       - JENKINS_ADMIN_PASSWORD=${JENKINS_ADMIN_PASSWORD:-admin}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-changeme}

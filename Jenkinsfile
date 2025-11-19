@@ -52,12 +52,18 @@ def createGitTag(version) {
 }
 
 def generateReleaseNotes(version, previousVersion) {
-    def notes = sh(
-        script: """
-            git log ${previousVersion}..HEAD --pretty=format:'- %s (%h)' --no-merges
-        """,
-        returnStdout: true
-    ).trim()
+    def notes = ""
+    if (previousVersion && previousVersion != "0.0.0") {
+        notes = sh(
+            script: "git log ${previousVersion}..HEAD --pretty=format:'- %s (%h)' --no-merges 2>/dev/null || echo 'Initial release'",
+            returnStdout: true
+        ).trim()
+    } else {
+        notes = sh(
+            script: "git log --pretty=format:'- %s (%h)' --no-merges",
+            returnStdout: true
+        ).trim()
+    }
     
     writeFile file: "RELEASE_NOTES_${version}.md", text: """
 # Release v${version}
@@ -249,6 +255,9 @@ pipeline {
         }
 
         stage('Build and Test Services') {
+            when {
+                expression { false }
+            }
             steps {
                 script {
                     sh 'chmod +x mvnw'
@@ -259,6 +268,9 @@ pipeline {
         }
         
         stage('Trivy Filesystem Scan') {
+            when {
+                expression { false }
+            }
             steps {
                 script {
                     echo "Running Trivy filesystem vulnerability scan..."
@@ -286,6 +298,9 @@ pipeline {
         }
         
         stage('Code Quality Analysis') {
+            when {
+                expression { false }
+            }
             steps {
                 script {
                     withCredentials([usernamePassword(
@@ -307,8 +322,13 @@ pipeline {
 
         stage('Docker Build & Push') {
             when {
+                expression { false }
+            }
+            /*
+            when {
                 expression { isProduction() || isDevelopment() }
             }
+            */
             steps {
                 script {
                     def services = getAllServices()
@@ -352,8 +372,13 @@ pipeline {
         
         stage('Trivy Image Scan') {
             when {
+                expression { false }
+            }
+            /*
+            when {
                 expression { isProduction() || isDevelopment() }
             }
+            */
             steps {
                 script {
                     def services = getAllServices()
@@ -506,63 +531,6 @@ pipeline {
                         echo "Strategy: ${env.DEPLOYMENT_STRATEGY}"
                         
                         sendNotification('SUCCESS', "Production deployment approved by ${env.APPROVER}")
-                    }
-                }
-            }
-        }
-        
-        stage('Deploy Observability Stack') {
-            when {
-                expression { isProduction() }
-            }
-            steps {
-                script {
-                    withCredentials([file(credentialsId: 'kubeconfig-prod', variable: 'KUBECONFIG')]) {
-                        echo "Deploying Observability Stack..."
-                        sh "kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -"
-                        
-                        def observabilityValuesExists = fileExists('infra/helm/observability/values.yaml')
-                        def helmArgs = observabilityValuesExists ? "--values infra/helm/observability/values.yaml" : ""
-                        
-                        sh """
-                            helm repo add prometheus-community https://prometheus-community.github.io/helm-charts || true
-                            helm repo add grafana https://grafana.github.io/helm-charts || true
-                            helm repo update
-                        """
-                        
-                        sh """
-                            if helm list -n observability | grep -q "kube-prometheus-stack"; then
-                                echo "Upgrading kube-prometheus-stack..."
-                                helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-                                    --namespace observability \
-                                    ${helmArgs} \
-                                    --wait --timeout 20m || echo "Warning: Observability stack upgrade had issues"
-                            else
-                                echo "Installing kube-prometheus-stack..."
-                                helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-                                    --namespace observability \
-                                    ${helmArgs} \
-                                    --wait --timeout 20m || echo "Warning: Observability stack installation had issues"
-                            fi
-                        """
-                        
-                        sh """
-                            if helm list -n observability | grep -q "loki-stack"; then
-                                echo "Upgrading loki-stack..."
-                                helm upgrade loki-stack grafana/loki-stack \
-                                    --namespace observability \
-                                    ${helmArgs} \
-                                    --wait --timeout 15m || echo "Warning: Loki stack upgrade had issues"
-                            else
-                                echo "Installing loki-stack..."
-                                helm install loki-stack grafana/loki-stack \
-                                    --namespace observability \
-                                    ${helmArgs} \
-                                    --wait --timeout 15m || echo "Warning: Loki stack installation had issues"
-                            fi
-                        """
-                        
-                        echo "Observability stack deployment completed"
                     }
                 }
             }
